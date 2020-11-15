@@ -2,6 +2,8 @@
 
 SMARTS (Scalable Microscopic Adaptive Road Traffic Simulator) is a flexible microscopic traffic simulator developed at the School of Computing and Information Systems, University of Melbourne. The microscopic simulator model vehicles and traffic lights individually. Various road rules and driver behavior are implemented into SMARTS. The simulator can output various types of traffic data. For more information about the simulator, please visit https://projects.eng.unimelb.edu.au/smarts/. 
 
+As mentioned in the license file, this program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
+
 If you would like to customize the simulator, the following simple programming guide may help you get started. 
 
 The source code of SMARTS contains five packages. The name and purpose of each package are as follows. 

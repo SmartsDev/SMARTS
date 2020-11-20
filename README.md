@@ -1,10 +1,16 @@
 # SMARTS
 
-SMARTS (Scalable Microscopic Adaptive Road Traffic Simulator) is a flexible microscopic traffic simulator developed at the School of Computing and Information Systems, University of Melbourne. The microscopic simulator model vehicles and traffic lights individually. Various road rules and driver behavior are implemented into SMARTS. The simulator can output various types of traffic data. For more information about the simulator, please visit https://projects.eng.unimelb.edu.au/smarts/. 
+SMARTS (Scalable Microscopic Adaptive Road Traffic Simulator) is a flexible microscopic traffic simulator developed at the School of Computing and Information Systems, University of Melbourne. The simulator models vehicles and traffic lights individually. Various road rules and driver behavior are implemented. The simulator can output various types of traffic data. SMARTS is built upon a distributed architecture that consists of a server and an arbitrary number of workers. You can run SMARTS as a standalone application, where the server and the workers are bundled together, or run it in a distributed fashion. The distributed architecture enables efficient large-scale traffic simulations. For more information about the simulator, such as usage examples, user manual and publications, please visit our project website https://projects.eng.unimelb.edu.au/smarts/. 
+
+To run SMARTS from the source code, you first need to copy the folders ('common', 'processor', etc.) to your project (e.g., the folder 'src' in a Java project in Eclipse). Then, you can launch the simulator in several ways. The most common way might be to starting the *Simulator* class in the folder *processor*. By doing this, SMARTS will run as a standalone application. More details about launching the simulator are shown in the [documents](https://projects.eng.unimelb.edu.au/smarts/documentation/) on our project website. 
+
+If you would like to publish work based on SMARTS, please kindly cite [our paper](https://doi.org/10.1145/2898363) and the location of this repository.
 
 As mentioned in the license file, this program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
 
-If you would like to customize the simulator, the following simple programming guide may help you get started. 
+If you would like to customize SMARTS, such as adding new features by extending the code, the following simple programming guide may help you get started. 
+
+# A Simple Programming Guide
 
 The source code of SMARTS contains five packages. The name and purpose of each package are as follows. 
 

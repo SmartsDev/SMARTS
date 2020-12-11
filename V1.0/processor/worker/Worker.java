@@ -205,7 +205,7 @@ public class Worker implements MessageHandler, Runnable {
 		for (final Fellow fellow : fellowWorkers) {
 			for (final Edge e : fellow.inwardEdgesAcrossBorder) {
 				edgeSet.add(e);
-				edgeSet.addAll(findInwardEdgesWithinCertainDistance(e.startNode, 0, 28.0 / Settings.numStepsPerSecond,
+				edgeSet.addAll(findInwardEdgesWithinCertainDistance(e.startNode, 0, 56.0 / Settings.numStepsPerSecond,
 						edgeSet));
 			}
 		}

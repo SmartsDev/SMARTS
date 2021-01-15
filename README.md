@@ -6,8 +6,7 @@ To run SMARTS from the source code, you first need to copy the folders ('common'
 
 If you would like to publish work based on SMARTS, please kindly cite [our paper](https://doi.org/10.1145/2898363) and the location of this repository.
 
-As mentioned in the license file, this program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. If you had questions, you can [contact us on our project website](https://projects.eng.unimelb.edu.au/smarts/contact-us/).
-
+If you had questions, you can [contact us on our project website](https://projects.eng.unimelb.edu.au/smarts/contact-us/).
 
 If you would like to customize SMARTS, such as adding new features by extending the code, the following simple programming guide may help you get started. 
 

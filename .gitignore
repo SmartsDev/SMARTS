@@ -108,3 +108,4 @@ cwallet.sso.lck
 SMARTS.iml
 target/*
 *.lst
+/.idea

@@ -443,6 +443,12 @@ public class Server implements MessageHandler, Runnable {
 			System.out.println("Please specify the number of workers.");
 			Settings.numWorkers = Integer.parseInt(sc.nextLine());
 		}
+		System.out.println("Please specify the partitioning type [GridGraph, Space-grid].");
+		Settings.partitionType = sc.nextLine();
+		while (!(Settings.partitionType.equals("GridGraph") || Settings.partitionType.equals("Space-grid")) ) {
+			System.out.println("Please specify the partitioning type [GridGraph, Space-grid].");
+			Settings.partitionType = sc.nextLine();
+		}
 		// Kill all connected workers
 		killConnectedWorkers();
 		// Inform user next step

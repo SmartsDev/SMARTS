@@ -53,6 +53,7 @@ public class Message_SW_Setup {
 	public boolean isAllowReroute = false;
 	public boolean isAllowTramRule = true;
 	public boolean isDriveOnLeft;
+	public String partitionType;
 
 	public Message_SW_Setup() {
 
@@ -65,6 +66,7 @@ public class Message_SW_Setup {
 		numWorkers = Settings.numWorkers;
 		startStep = step;
 		maxNumSteps = Settings.maxNumSteps;
+		partitionType = Settings.partitionType;
 		numStepsPerSecond = Settings.numStepsPerSecond;
 		workerToServerReportStepGapInServerlessMode = Settings.trafficReportStepGapInServerlessMode;
 		periodOfTrafficWaitForTramAtStop = Settings.periodOfTrafficWaitForTramAtStop;

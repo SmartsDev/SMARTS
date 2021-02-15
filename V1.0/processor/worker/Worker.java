@@ -499,6 +499,7 @@ public class Worker implements MessageHandler, Runnable {
 		Settings.numWorkers = received.numWorkers;
 		Settings.maxNumSteps = received.maxNumSteps;
 		Settings.numStepsPerSecond = received.numStepsPerSecond;
+		Settings.partitionType = received.partitionType;
 		step = received.startStep;
 		timeNow = step / Settings.numStepsPerSecond;
 		Settings.trafficReportStepGapInServerlessMode = received.workerToServerReportStepGapInServerlessMode;

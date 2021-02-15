@@ -190,6 +190,10 @@ public class ScriptLoader {
 				Settings.isAllowReroute = Boolean.parseBoolean(fields[1]);
 				break;
 			}
+			case "partitionType": {
+				Settings.partitionType = fields[1];
+				break;
+			}
 			}
 
 		}

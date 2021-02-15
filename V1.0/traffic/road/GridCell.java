@@ -16,6 +16,10 @@ public class GridCell {
 	 */
 	public int col;
 	/**
+	 * ID of the cell is the "rowTcol"
+	 */
+	public String id;
+	/**
 	 * Collection of nodes that are contained in the cell.
 	 */
 	public ArrayList<Node> nodes = new ArrayList<>(500);

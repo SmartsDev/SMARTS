@@ -1,9 +1,10 @@
 package processor.server;
 
-import java.util.ArrayList;
-import java.util.Random;
+import java.util.*;
 
 import common.Settings;
+import it.unimi.dsi.fastutil.ints.IntSet;
+import processor.server.graph_partition.GraphGenerator;
 import traffic.road.GridCell;
 import traffic.road.RoadNetwork;
 
@@ -111,13 +112,60 @@ public class WorkloadBalancer {
 	 */
 	public static void partitionGridCells(final ArrayList<WorkerMeta> workers, final RoadNetwork roadNetwork) {
 
-		// Clear existing grid cells in the work area of each worker
+
+		final GridCell[][] grid = roadNetwork.grid;
+		if(Settings.partitionType.equals("GridGraph") && Settings.numWorkers>1) {
+			GraphGenerator graph;
+			List<IntSet> parts;
+			Map<String,GridCell> gridCells  = new HashMap<>();
+			for (int row = 0; row < Settings.numGridRows; row++) {
+				for (int col = 0; col < Settings.numGridCols; col++) {
+
+					gridCells.put(grid[row][col].id,grid[row][col]);
+				}
+			}
+			graph = new GraphGenerator();
+			graph.buildGridGraph(gridCells);
+			parts = graph.computePartitions(Settings.numWorkers,gridCells);
+			Map<Integer,Set<String>> partCellsIds = balanceByMETIS( parts, graph.cellGraphIndex);
+			assignPartitionsToWorkers(partCellsIds,workers,grid);
+		}
+		else
+			balanceByLaneLength(grid,workers,roadNetwork);
+
+		System.out.println(Settings.partitionType + " Partitioning type");
+		for (final WorkerMeta worker : workers) {
+			System.out.println("Worker " + worker.name + "'s area has " + worker.workarea.workCells.size() + " cells.");
+		}
+
+	}
+
+	private static void assignPartitionsToWorkers(Map<Integer, Set<String>> partCellsIds, ArrayList<WorkerMeta> workers,GridCell[][] grid) {
+
+		Map<Integer,Set<GridCell>> partitions = new HashMap<>();
+		for(Integer part: partCellsIds.keySet()){
+			Set<GridCell> cells = new HashSet<>();
+			for(String cid:partCellsIds.get(part)){
+				String[] id = cid.split("T");
+				int i = Integer.parseInt(id[0]);
+				int j = Integer.parseInt(id[1]);
+				cells.add(grid[i][j]);
+			}
+			partitions.put(part,cells);
+		}
+		int index = 0;
+		for (final WorkerMeta worker : workers) {
+			index++;
+			worker.workarea.workCells.clear();
+			worker.workarea.workCells.addAll(partitions.get(index));
+
+		}
+	}
+
+	private static void balanceByLaneLength(GridCell[][] grid, ArrayList<WorkerMeta> workers, RoadNetwork roadNetwork) {
 		for (final WorkerMeta worker : workers) {
 			worker.workarea.workCells.clear();
 		}
-
-		final GridCell[][] grid = roadNetwork.grid;
-
 		double laneLengthWholeMap = 0;
 		for (int i = 0; i < Settings.numGridRows; i++) {
 			for (int j = 0; j < Settings.numGridCols; j++) {
@@ -161,11 +209,28 @@ public class WorkloadBalancer {
 
 			}
 		}
+	}
+	private static Map<Integer,Set<String>> balanceByMETIS(List<IntSet> parts,  Map<GridCell, Integer> cellGraphIndex) {
+		Map<Integer,Set<String>> cellsParts = new HashMap<>();
 
-		for (final WorkerMeta worker : workers) {
-			System.out.println("Worker " + worker.name + "'s area has " + worker.workarea.workCells.size() + " cells.");
+		ArrayList<int[]> partitions = new ArrayList<>();
+		for( IntSet item: parts){
+			partitions.add(item.toIntArray());
 		}
 
-	}
+		for (int groupId = 0; groupId < partitions.size(); groupId++) {
+			Set<String> cells = new HashSet<>();
+			for (int cellIndex : partitions.get(groupId)) {
 
+
+				cells.add(Objects.requireNonNull(GraphGenerator.getKey(cellGraphIndex, cellIndex)).id);
+			}
+			cellsParts.put((groupId+1),cells);
+
+		}
+
+
+		return cellsParts;
+
+	}
 }

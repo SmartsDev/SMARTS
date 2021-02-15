@@ -151,6 +151,8 @@ public class RoadNetwork {
 				grid[i][j] = new GridCell();
 				grid[i][j].row = i;
 				grid[i][j].col = j;
+				grid[i][j].id = i+"T"+j;
+
 			}
 		}
 

@@ -106,3 +106,5 @@ cwallet.sso.lck
 .idea/modules.xml
 .idea/vcs.xml
 SMARTS.iml
+target/*
+*.lst

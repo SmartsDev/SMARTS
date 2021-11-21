@@ -8,6 +8,7 @@ import processor.communication.message.SerializableTrajectoryPoint;
 import traffic.TrafficNetwork;
 import traffic.light.TrafficLightTiming;
 import traffic.road.Edge;
+import traffic.road.GridCell;
 import traffic.road.Lane;
 import traffic.routing.RouteLeg;
 import traffic.vehicle.CarFollow;
@@ -25,6 +26,7 @@ import traffic.vehicle.VehicleUtil;
  */
 public class Simulation {
 	TrafficNetwork trafficNetwork;
+	Workarea workarea;
 	ArrayList<Fellow> connectedFellows;
 	ArrayList<Vehicle> oneStepData_vehiclesReachedFellowWorker = new ArrayList<>();
 	ArrayList<Vehicle> oneStepData_foregroundVehiclesReachedDestination = new ArrayList<>();
@@ -33,8 +35,10 @@ public class Simulation {
 	LaneChange laneChange = new LaneChange(vehicleUtil);
 	CarFollow carFollow = new CarFollow(vehicleUtil);
 
-	public Simulation(final TrafficNetwork trafficNetwork, final ArrayList<Fellow> connectedFellows) {
+	public Simulation(final TrafficNetwork trafficNetwork,
+			final ArrayList<Fellow> connectedFellows, final Workarea workarea) {
 		this.trafficNetwork = trafficNetwork;
+		this.workarea = workarea;
 		this.connectedFellows = connectedFellows;
 	}
 
@@ -312,6 +316,14 @@ public class Simulation {
 		if (vehicle.lane == null) {
 			return false;
 		}
+
+		// Does vehicle's edge end in the current workarea? 
+		for (GridCell cell : workarea.workCells) {
+			if (cell.nodes.contains(vehicle.lane.edge.endNode)) {
+				return false;
+			}
+		}
+
 		for (final Fellow fellowWorker : connectedFellows) {
 			for (final Edge edge : fellowWorker.inwardEdgesAcrossBorder) {
 				if (edge == vehicle.lane.edge) {
@@ -320,6 +332,15 @@ public class Simulation {
 					return true;
 				}
 			}
+
+			for (GridCell cell : fellowWorker.workarea.workCells) {
+				if (cell.nodes.contains(vehicle.lane.edge.endNode)) {
+					vehicle.active = false;
+					fellowWorker.vehiclesToCreateAtBorder.add(vehicle);
+					return true;
+				}
+			}
+
 		}
 		return false;
 	}

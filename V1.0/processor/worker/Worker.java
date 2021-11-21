@@ -536,7 +536,7 @@ public class Worker implements MessageHandler, Runnable {
 			trafficNetwork = new TrafficNetwork();
 			processReceivedMetadataOfWorkers(received.metadataWorkers);
 
-			simulation = new Simulation(trafficNetwork, connectedFellows);
+			simulation = new Simulation(trafficNetwork, connectedFellows, workarea);
 			divideLaneSetForServerlessSim();
 		}
 

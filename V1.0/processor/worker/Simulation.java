@@ -317,30 +317,18 @@ public class Simulation {
 			return false;
 		}
 
-		// Does vehicle's edge end in the current workarea? 
-		for (GridCell cell : workarea.workCells) {
-			if (cell.nodes.contains(vehicle.lane.edge.endNode)) {
-				return false;
-			}
-		}
-
-		for (final Fellow fellowWorker : connectedFellows) {
-			for (final Edge edge : fellowWorker.inwardEdgesAcrossBorder) {
-				if (edge == vehicle.lane.edge) {
+		// Does vehicle's edge end in the current workarea?
+		if (workarea.workCells.contains(vehicle.lane.edge.endNode.gridCell)) {
+			return false;
+		} else {
+			// The vehicle will be transferred to the fellow worker whose area covers the end node of the vehicle's edge 
+			for (final Fellow fellowWorker : connectedFellows) {
+				if(fellowWorker.workarea.workCells.contains(vehicle.lane.edge.endNode.gridCell)){
 					vehicle.active = false;
 					fellowWorker.vehiclesToCreateAtBorder.add(vehicle);
 					return true;
 				}
 			}
-
-			for (GridCell cell : fellowWorker.workarea.workCells) {
-				if (cell.nodes.contains(vehicle.lane.edge.endNode)) {
-					vehicle.active = false;
-					fellowWorker.vehiclesToCreateAtBorder.add(vehicle);
-					return true;
-				}
-			}
-
 		}
 		return false;
 	}

@@ -9,6 +9,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 
 import common.Settings;
+import common.SysUtil;
 import osm.OSM;
 import processor.communication.IncomingConnectionBuilder;
 import processor.communication.MessageHandler;
@@ -51,18 +52,22 @@ public class Server implements MessageHandler, Runnable {
 	int step = 0;// Time step in the current simulation
 	GUI gui;
 	FileOutput fileOutput = new FileOutput();
-	public boolean isSimulating = false;// Whether simulation is running, i.e., it is not paused or stopped
+	public boolean isSimulating = false;// Whether simulation is running, i.e.,
+										// it is not paused or stopped
 	int numInternalNonPubVehiclesAtAllWorkers = 0;
 	int numInternalTramsAtAllWorkers = 0;
 	int numInternalBusesAtAllWorkers = 0;
 	long timeStamp = 0;
 	double simulationWallTime = 0;// Total time length spent on simulation
 	ScriptLoader scriptLoader = new ScriptLoader();
-	int totalNumWwCommChannels = 0;// Total number of communication channels between workers. A worker has two
-									// channels with a neighbor worker, one for sending and one for receiving.
+	int totalNumWwCommChannels = 0;// Total number of communication channels
+									// between workers. A worker has two
+									// channels with a neighbor worker, one for
+									// sending and one for receiving.
 	ArrayList<Node> nodesToAddLight = new ArrayList<>();
 	ArrayList<Node> nodesToRemoveLight = new ArrayList<>();
-	int numTrajectoriesReceived = 0;// Number of complete trajectories received from workers
+	int numTrajectoriesReceived = 0;// Number of complete trajectories received
+									// from workers
 	int numVehiclesCreatedDuringSetup = 0;// For updating setup progress on GUI
 	int numVehiclesNeededAtStart = 0;// For updating setup progress on GUI
 	double aggregatedVehicleCountInOneSimulation = 0.0;
@@ -79,7 +84,8 @@ public class Server implements MessageHandler, Runnable {
 		if (processCommandLineArguments(args)) {
 			new Server().run();
 		} else {
-			System.out.println("There is an error in command line parameter. Program exits.");
+			System.out
+					.println("There is an error in command line parameter. Program exits.");
 		}
 	}
 
@@ -103,10 +109,13 @@ public class Server implements MessageHandler, Runnable {
 	 * workers is reached.
 	 */
 	void addWorker(final Message_WS_Join received) {
-		final WorkerMeta worker = new WorkerMeta(received.workerName, received.workerAddress, received.workerPort);
-		if (isAllWorkersAtState(WorkerState.NEW) && Settings.numWorkers > workerMetas.size()) {
+		final WorkerMeta worker = new WorkerMeta(received.workerName,
+				received.workerAddress, received.workerPort);
+		if (isAllWorkersAtState(WorkerState.NEW)
+				&& Settings.numWorkers > workerMetas.size()) {
 			workerMetas.add(worker);
-			System.out.println(workerMetas.size() + "/" + Settings.numWorkers + " workers connected.");
+			System.out.println(workerMetas.size() + "/" + Settings.numWorkers
+					+ " workers connected.");
 			if (Settings.isVisualize) {
 				gui.updateNumConnectedWorkers(workerMetas.size());
 				if (workerMetas.size() == Settings.numWorkers) {
@@ -115,12 +124,14 @@ public class Server implements MessageHandler, Runnable {
 			} else {
 				if (workerMetas.size() == Settings.numWorkers) {
 					isOpenForNewWorkers = false;// No need for more workers
-					acceptSimScriptFromConsole();// Let user input simulation script path
+					acceptSimScriptFromConsole();// Let user input simulation
+													// script path
 				}
 
 			}
 		} else {
-			final Message_SW_KillWorker msd = new Message_SW_KillWorker(Settings.isSharedJVM);
+			final Message_SW_KillWorker msd = new Message_SW_KillWorker(
+					Settings.isSharedJVM);
 			worker.send(msd);
 		}
 	}
@@ -130,7 +141,8 @@ public class Server implements MessageHandler, Runnable {
 	 */
 	void askWorkersProceedWithoutServer() {
 		timeStamp = System.nanoTime();
-		final Message_SW_Serverless_Start message = new Message_SW_Serverless_Start(step);
+		final Message_SW_Serverless_Start message = new Message_SW_Serverless_Start(
+				step);
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(message);
 			worker.setState(WorkerState.SERVERLESS_WORKING);
@@ -159,13 +171,12 @@ public class Server implements MessageHandler, Runnable {
 	}
 
 	/*
-	 * Ask workers to update traffic in their corresponding work areas for one time
-	 * step. This is called after workers exchange traffic information with their
-	 * neighbors in server-based simulation.
+	 * Ask workers to update traffic in their corresponding work areas for one
+	 * time step. This is called after workers exchange traffic information with
+	 * their neighbors in server-based simulation.
 	 */
 	synchronized void askWorkersSimulateOneStep() {
-		boolean isNewNonPubVehiclesAllowed = numInternalNonPubVehiclesAtAllWorkers < Settings.numGlobalRandomBackgroundPrivateVehicles
-				? true
+		boolean isNewNonPubVehiclesAllowed = numInternalNonPubVehiclesAtAllWorkers < Settings.numGlobalRandomBackgroundPrivateVehicles ? true
 				: false;
 		boolean isNewTramsAllowed = numInternalTramsAtAllWorkers < Settings.numGlobalBackgroundRandomTrams ? true
 				: false;
@@ -180,8 +191,9 @@ public class Server implements MessageHandler, Runnable {
 		for (final WorkerMeta worker : workerMetas) {
 			worker.setState(WorkerState.SIMULATING);
 		}
-		final Message_SW_ServerBased_Simulate message = new Message_SW_ServerBased_Simulate(isNewNonPubVehiclesAllowed,
-				isNewTramsAllowed, isNewBusesAllowed, UUID.randomUUID().toString());
+		final Message_SW_ServerBased_Simulate message = new Message_SW_ServerBased_Simulate(
+				isNewNonPubVehiclesAllowed, isNewTramsAllowed,
+				isNewBusesAllowed, UUID.randomUUID().toString());
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(message);
 		}
@@ -206,7 +218,8 @@ public class Server implements MessageHandler, Runnable {
 			final OSM osm = new OSM();
 			osm.processOSM(Settings.inputOpenStreetMapFile, true);
 			Settings.isBuiltinRoadGraph = false;
-			// Revert to built-in map if there was an error when converting new map
+			// Revert to built-in map if there was an error when converting new
+			// map
 			if (Settings.roadGraph.length() == 0) {
 				Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
 				Settings.isBuiltinRoadGraph = true;
@@ -216,17 +229,19 @@ public class Server implements MessageHandler, Runnable {
 			Settings.isBuiltinRoadGraph = true;
 		}
 
-		roadNetwork = new RoadNetwork();// Build road network based on new road graph
+		roadNetwork = new RoadNetwork();// Build road network based on new road
+										// graph
 	}
 
 	/**
 	 * Change simulation speed by setting pause time after doing a step at all
-	 * workers. Note that this will affect simulation time. By default there is no
-	 * pause time between steps.
+	 * workers. Note that this will affect simulation time. By default there is
+	 * no pause time between steps.
 	 */
 	public void changeSpeed(final int pauseTimeEachStep) {
 		Settings.pauseTimeBetweenStepsInMilliseconds = pauseTimeEachStep;
-		final Message_SW_ChangeSpeed message = new Message_SW_ChangeSpeed(Settings.pauseTimeBetweenStepsInMilliseconds);
+		final Message_SW_ChangeSpeed message = new Message_SW_ChangeSpeed(
+				Settings.pauseTimeBetweenStepsInMilliseconds);
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(message);
 		}
@@ -258,7 +273,8 @@ public class Server implements MessageHandler, Runnable {
 	}
 
 	public void killConnectedWorkers() {
-		final Message_SW_KillWorker msd = new Message_SW_KillWorker(Settings.isSharedJVM);
+		final Message_SW_KillWorker msd = new Message_SW_KillWorker(
+				Settings.isSharedJVM);
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(msd);
 		}
@@ -269,7 +285,8 @@ public class Server implements MessageHandler, Runnable {
 	public void pauseSim() {
 		isSimulating = false;
 		if (!Settings.isServerBased) {
-			final Message_SW_Serverless_Pause message = new Message_SW_Serverless_Pause(step);
+			final Message_SW_Serverless_Pause message = new Message_SW_Serverless_Pause(
+					step);
 			for (final WorkerMeta worker : workerMetas) {
 				worker.send(message);
 			}
@@ -289,7 +306,8 @@ public class Server implements MessageHandler, Runnable {
 		} else if (message instanceof Message_WS_SetupCreatingVehicles) {
 			numVehiclesCreatedDuringSetup += ((Message_WS_SetupCreatingVehicles) message).numVehicles;
 
-			double createdVehicleRatio = (double) numVehiclesCreatedDuringSetup / numVehiclesNeededAtStart;
+			double createdVehicleRatio = (double) numVehiclesCreatedDuringSetup
+					/ numVehiclesNeededAtStart;
 			if (createdVehicleRatio > 1) {
 				createdVehicleRatio = 1;
 			}
@@ -298,7 +316,8 @@ public class Server implements MessageHandler, Runnable {
 				gui.updateSetupProgress(createdVehicleRatio);
 			}
 		} else if (message instanceof Message_WS_SetupDone) {
-			updateWorkerState(((Message_WS_SetupDone) message).workerName, WorkerState.READY);
+			updateWorkerState(((Message_WS_SetupDone) message).workerName,
+					WorkerState.READY);
 			totalNumWwCommChannels += (((Message_WS_SetupDone) message).numFellowWorkers);
 			if (isAllWorkersAtState(WorkerState.READY)) {
 				if (Settings.isVisualize) {
@@ -315,8 +334,10 @@ public class Server implements MessageHandler, Runnable {
 			Message_WS_ServerBased_SharedMyTrafficWithNeighbor messageToProcess = (Message_WS_ServerBased_SharedMyTrafficWithNeighbor) message;
 
 			for (final WorkerMeta w : workerMetas) {
-				if (w.name.equals(messageToProcess.workerName) && (w.state == WorkerState.SHARING_STARTED)) {
-					updateWorkerState(messageToProcess.workerName, WorkerState.SHARED);
+				if (w.name.equals(messageToProcess.workerName)
+						&& (w.state == WorkerState.SHARING_STARTED)) {
+					updateWorkerState(messageToProcess.workerName,
+							WorkerState.SHARED);
 					if (isAllWorkersAtState(WorkerState.SHARED)) {
 						askWorkersSimulateOneStep();
 					}
@@ -340,7 +361,8 @@ public class Server implements MessageHandler, Runnable {
 
 			// Stop if max number of steps is reached in server-based mode
 			if (Settings.isServerBased) {
-				updateWorkerState(received.workerName, WorkerState.FINISHED_ONE_STEP);
+				updateWorkerState(received.workerName,
+						WorkerState.FINISHED_ONE_STEP);
 				if (isAllWorkersAtState(WorkerState.FINISHED_ONE_STEP)) {
 					updateSimulationTime();
 					if (step >= Settings.maxNumSteps) {
@@ -375,13 +397,14 @@ public class Server implements MessageHandler, Runnable {
 	}
 
 	synchronized void processCachedReceivedTrafficReports() {
-		final Iterator<Message_WS_TrafficReport> iMessage = receivedTrafficReportCache.iterator();
+		final Iterator<Message_WS_TrafficReport> iMessage = receivedTrafficReportCache
+				.iterator();
 		while (iMessage.hasNext()) {
 			final Message_WS_TrafficReport message = iMessage.next();
 			// Update GUI
 			if (Settings.isVisualize) {
-				gui.updateObjectData(message.vehicles, message.trafficLights, message.workerName, workerMetas.size(),
-						message.step);
+				gui.updateObjectData(message.vehicles, message.trafficLights,
+						message.workerName, workerMetas.size(), message.step);
 			}
 			// Build trajectories of vehicles based on the vehicle list
 			if (Settings.outputTrajectoryScope != DataOutputScope.NONE) {
@@ -389,14 +412,16 @@ public class Server implements MessageHandler, Runnable {
 				for (Serializable_GUI_Vehicle vehicle : message.vehicles) {
 					if (Settings.outputTrajectoryScope == DataOutputScope.ALL
 							|| (vehicle.isForeground && Settings.outputTrajectoryScope == DataOutputScope.FOREGROUND)
-							|| (!vehicle.isForeground
-									&& Settings.outputTrajectoryScope == DataOutputScope.BACKGROUND)) {
-						String key=vehicle.id+"_"+vehicle.type;
+							|| (!vehicle.isForeground && Settings.outputTrajectoryScope == DataOutputScope.BACKGROUND)) {
+						String key = vehicle.id + "_" + vehicle.type;
 						if (!trajectoriesForOutput.containsKey(key)) {
-							trajectoriesForOutput.put(key, new TreeMap<Double, double[]>());
+							trajectoriesForOutput.put(key,
+									new TreeMap<Double, double[]>());
 						}
-						trajectoriesForOutput.get(key).put(timeStamp,
-								new double[] { vehicle.latHead, vehicle.lonHead });
+						trajectoriesForOutput.get(key)
+								.put(timeStamp,
+										new double[] { vehicle.latHead,
+												vehicle.lonHead });
 					}
 				}
 			}
@@ -432,7 +457,8 @@ public class Server implements MessageHandler, Runnable {
 		}
 
 		// Prepare to receive connection request from workers
-		new IncomingConnectionBuilder(Settings.serverListeningPortForWorkers, this).start();
+		new IncomingConnectionBuilder(Settings.serverListeningPortForWorkers,
+				this).start();
 	}
 
 	void acceptInitialConfigFromConsole() {
@@ -497,7 +523,8 @@ public class Server implements MessageHandler, Runnable {
 			askWorkersShareTrafficDataWithFellowWorkers();
 		} else {
 			System.out.println("Resuming server-less simulation...");
-			final Message_SW_Serverless_Resume message = new Message_SW_Serverless_Resume(step);
+			final Message_SW_Serverless_Resume message = new Message_SW_Serverless_Resume(
+					step);
 			for (final WorkerMeta worker : workerMetas) {
 				worker.send(message);
 			}
@@ -505,8 +532,8 @@ public class Server implements MessageHandler, Runnable {
 	}
 
 	/**
-	 * Update node lists for nodes where traffic light needs to be added or removed.
-	 * The lists will be sent to worker during setup.
+	 * Update node lists for nodes where traffic light needs to be added or
+	 * removed. The lists will be sent to worker during setup.
 	 */
 	public void setLightChangeNode(final Node node) {
 		node.light = !node.light;
@@ -519,21 +546,25 @@ public class Server implements MessageHandler, Runnable {
 		}
 	}
 
-	ArrayList<double[]> setRouteSourceDestinationWindow(final ArrayList<Serializable_GPS_Rectangle> sList) {
+	ArrayList<double[]> setRouteSourceDestinationWindow(
+			final ArrayList<Serializable_GPS_Rectangle> sList) {
 		final ArrayList<double[]> list = new ArrayList<>();
 		for (final Serializable_GPS_Rectangle sgr : sList) {
 			// Skip the zero item when the list does not have meaningful items
-			if ((sgr.minLon == 0) && (sgr.maxLat == 0) && (sgr.maxLon == 0) && (sgr.minLat == 0)) {
+			if ((sgr.minLon == 0) && (sgr.maxLat == 0) && (sgr.maxLon == 0)
+					&& (sgr.minLat == 0)) {
 				continue;
 			}
-			list.add(new double[] { sgr.minLon, sgr.maxLat, sgr.maxLon, sgr.minLat });
+			list.add(new double[] { sgr.minLon, sgr.maxLat, sgr.maxLon,
+					sgr.minLat });
 		}
 		return list;
 	}
 
 	/**
 	 * Resets dynamic fields and sends simulation configuration to workers. The
-	 * workers will set up simulation environment upon receiving the configuration.
+	 * workers will set up simulation environment upon receiving the
+	 * configuration.
 	 */
 	public void setupNewSim() {
 		// Reset temporary variables
@@ -559,20 +590,27 @@ public class Server implements MessageHandler, Runnable {
 		}
 
 		// Determine the number of internal vehicles at all workers
-		WorkloadBalancer.assignNumInternalVehiclesToWorkers(workerMetas, roadNetwork);
+		WorkloadBalancer.assignNumInternalVehiclesToWorkers(workerMetas,
+				roadNetwork);
 
 		// Assign vehicle routes from external file to workers
 		final RouteLoader routeLoader = new RouteLoader(this, workerMetas);
 		routeLoader.loadRoutes();
 
 		// Get number of vehicles needed
-		numVehiclesNeededAtStart = routeLoader.vehicles.size() + Settings.numGlobalRandomBackgroundPrivateVehicles
-				+ Settings.numGlobalBackgroundRandomTrams + Settings.numGlobalBackgroundRandomBuses;
+		numVehiclesNeededAtStart = routeLoader.vehicles.size()
+				+ Settings.numGlobalRandomBackgroundPrivateVehicles
+				+ Settings.numGlobalBackgroundRandomTrams
+				+ Settings.numGlobalBackgroundRandomBuses;
+
+		// Prepare compressed road graph information
+		String compressedRoadGraph = SysUtil.compressString(Settings.roadGraph);
 
 		// Send simulation configuration to workers
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(new Message_SW_Setup(workerMetas, worker, roadNetwork.edges, step, nodesToAddLight,
-					nodesToRemoveLight));
+			worker.send(new Message_SW_Setup(workerMetas, worker,
+					roadNetwork.edges, step, nodesToAddLight,
+					nodesToRemoveLight, compressedRoadGraph));
 		}
 
 		// Initialize output
@@ -623,7 +661,8 @@ public class Server implements MessageHandler, Runnable {
 		nodesToAddLight.clear();
 		nodesToRemoveLight.clear();
 		processCachedReceivedTrafficReports();
-		fileOutput.outputSimLog(step, simulationWallTime, totalNumWwCommChannels, aggregatedVehicleCountInOneSimulation,
+		fileOutput.outputSimLog(step, simulationWallTime,
+				totalNumWwCommChannels, aggregatedVehicleCountInOneSimulation,
 				aggregatedVehicleTravelSpeedInOneSimulation);
 		aggregatedVehicleCountInOneSimulation = 0.0;
 		aggregatedVehicleTravelSpeedInOneSimulation = 0.0;
@@ -635,10 +674,12 @@ public class Server implements MessageHandler, Runnable {
 		travelTimesForOutput.clear();
 		fileOutput.close();
 
-		// Ask workers stop in server-less mode. Note that workers may already stopped
+		// Ask workers stop in server-less mode. Note that workers may already
+		// stopped
 		// before receiving the message.
 		if (!Settings.isServerBased) {
-			final Message_SW_Serverless_Stop message = new Message_SW_Serverless_Stop(step);
+			final Message_SW_Serverless_Stop message = new Message_SW_Serverless_Stop(
+					step);
 			for (final WorkerMeta worker : workerMetas) {
 				worker.send(message);
 				worker.setState(WorkerState.NEW);
@@ -655,7 +696,8 @@ public class Server implements MessageHandler, Runnable {
 			if (scriptLoader.isEmpty()) {
 				acceptConsoleCommandAtSimEnd();
 			} else {
-				System.out.println("Loading configuration of new simulation...");
+				System.out
+						.println("Loading configuration of new simulation...");
 				startSimulationFromLoadedScript();
 			}
 		}
@@ -668,7 +710,8 @@ public class Server implements MessageHandler, Runnable {
 		simulationWallTime += (double) (System.nanoTime() - timeStamp) / 1000000000;
 	}
 
-	synchronized void updateWorkerState(final String workerName, final WorkerState state) {
+	synchronized void updateWorkerState(final String workerName,
+			final WorkerState state) {
 		for (final WorkerMeta worker : workerMetas) {
 			if (worker.name.equals(workerName)) {
 				worker.state = state;

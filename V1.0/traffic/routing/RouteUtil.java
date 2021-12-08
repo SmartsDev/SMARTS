@@ -14,13 +14,25 @@ import traffic.vehicle.VehicleType;
 
 public class RouteUtil {
 
-	public static RouteLeg createRouteLeg(final int edgeIndex, final double stopDuration, final ArrayList<Edge> edges) {
+	public static RouteLeg createRouteLeg(final int edgeIndex,
+			final double stopDuration, final ArrayList<Edge> edges) {
 		return new RouteLeg(edges.get(edgeIndex), stopDuration);
+	}
+
+	public static double getTotalDistanceOfRoute(
+			final ArrayList<RouteLeg> routeLegs) {
+		double distance = 0;
+		for (int i = 1; i < routeLegs.size(); i++) {
+			final RouteLeg leg = routeLegs.get(i);
+			distance += leg.edge.length;
+		}
+		return distance;
 	}
 
 	static Node findRepeatedNode(final ArrayList<RouteLeg> routeLegs) {
 		final HashMap<Integer, Integer> indexList = new HashMap<>();
-		indexList.put(routeLegs.get(0).edge.startNode.index, routeLegs.get(0).edge.startNode.index);
+		indexList.put(routeLegs.get(0).edge.startNode.index,
+				routeLegs.get(0).edge.startNode.index);
 		for (int i = 1; i < routeLegs.size(); i++) {
 			final RouteLeg leg = routeLegs.get(i);
 			if (indexList.containsKey(leg.edge.endNode.index)) {
@@ -32,7 +44,8 @@ public class RouteUtil {
 		return null;
 	}
 
-	public static Routing.Algorithm getRoutingAlgorithmFromString(final String selected) {
+	public static Routing.Algorithm getRoutingAlgorithmFromString(
+			final String selected) {
 		for (final Routing.Algorithm algorithm : Routing.Algorithm.values()) {
 			if (selected.equalsIgnoreCase(algorithm.name())) {
 				return algorithm;
@@ -41,16 +54,19 @@ public class RouteUtil {
 		return Routing.Algorithm.DIJKSTRA;
 	}
 
-	public static ArrayList<RouteLeg> parseReceivedRoute(final ArrayList<SerializableRouteLeg> routeLegs,
+	public static ArrayList<RouteLeg> parseReceivedRoute(
+			final ArrayList<SerializableRouteLeg> routeLegs,
 			final ArrayList<Edge> edges) {
 		final ArrayList<RouteLeg> route = new ArrayList<>();
 		for (final SerializableRouteLeg routeLeg : routeLegs) {
-			route.add(createRouteLeg(routeLeg.edgeIndex, routeLeg.stopover, edges));
+			route.add(createRouteLeg(routeLeg.edgeIndex, routeLeg.stopover,
+					edges));
 		}
 		return route;
 	}
 
-	public static ArrayList<RouteLeg> removeRepeatSections(final ArrayList<RouteLeg> routeLegs) {
+	public static ArrayList<RouteLeg> removeRepeatSections(
+			final ArrayList<RouteLeg> routeLegs) {
 		Node repeatedNode = findRepeatedNode(routeLegs);
 		while (repeatedNode != null) {
 			final Iterator<RouteLeg> iterator = routeLegs.iterator();

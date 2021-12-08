@@ -192,7 +192,7 @@ public class ControlPanel_MiscConfig extends JPanel {
 		lblRouting.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
 		comboBoxRouting = new JComboBox(new Object[] {});
-		comboBoxRouting.setModel(new DefaultComboBoxModel(new String[] { "DIJKSTRA", "RANDOM_A_STAR" }));
+		comboBoxRouting.setModel(new DefaultComboBoxModel(new String[] { "DIJKSTRA", "RANDOM_A_STAR", "SIMPLE" }));
 		comboBoxRouting.setSelectedIndex(0);
 		comboBoxRouting.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		final GridBagConstraints gbc_chckbxIncludePublicVehicles = new GridBagConstraints();

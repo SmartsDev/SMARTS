@@ -2,9 +2,11 @@ package common;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 
 import processor.server.DataOutputScope;
 import traffic.light.TrafficLightTiming;
+import traffic.routing.RouteLeg;
 import traffic.routing.Routing;
 import traffic.vehicle.EmergencyStrategy;
 
@@ -80,6 +82,7 @@ public class Settings {
 	 */
 	final public static String delimiterItem = "\u001e";
 	final public static String delimiterSubItem = "\u001f";
+	
 
 	/*
 	 * Traffic generation

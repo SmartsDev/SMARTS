@@ -531,7 +531,7 @@ public class Worker implements MessageHandler, Runnable {
 			if (received.roadGraph.equals("builtin")) {
 				Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
 			} else {
-				Settings.roadGraph = received.roadGraph;
+				Settings.roadGraph = SysUtil.decompressString(received.roadGraph);
 			}
 			trafficNetwork = new TrafficNetwork();
 			processReceivedMetadataOfWorkers(received.metadataWorkers);

@@ -371,6 +371,9 @@ public class RoadNetwork {
 	}
 
 	public double getShortestGpsDistBtwTwoEdges(Line2D seg1, Line2D seg2) {
+		if(seg1.intersectsLine(seg2)){
+			return 0;
+		}
 		double shortestDist = Double.MAX_VALUE;
 		double[] ptSegDists = new double[4];
 		ptSegDists[0] = seg1.ptSegDist(seg2.getX1(), seg2.getY1());

@@ -41,20 +41,17 @@ public abstract class Routing {
 			newRoute.add(oldRoute.get(i));
 		}
 
-		// Try a few times for computing new route.
-		for (int i = 0; i < 3; i++) {
-			ArrayList<RouteLeg> partialRoute = createCompleteRoute(
-					oldRoute.get(currentIndexOnOldRoute + 1).edge,
-					oldRoute.get(oldRoute.size() - 1).edge, vehicle.type);
-			// The next leg on the old route cannot be the next leg on the new
-			// route!
-			if (partialRoute != null
-					&& partialRoute.get(0).edge != oldRoute
-							.get(currentIndexOnOldRoute + 1).edge) {
-				newRoute.addAll(partialRoute);
-				vehicle.routeLegs = newRoute;
-				break;
-			}
+		ArrayList<RouteLeg> partialRoute = createCompleteRoute(
+				oldRoute.get(currentIndexOnOldRoute + 1).edge,
+				oldRoute.get(oldRoute.size() - 1).edge, vehicle.type);
+		// The next leg on the old route cannot be the next leg on the new
+		// route!
+		if (partialRoute != null
+				&& partialRoute.get(0).edge != oldRoute
+						.get(currentIndexOnOldRoute + 1).edge) {
+			newRoute.addAll(partialRoute);
+			vehicle.routeLegs = newRoute;
+
 		}
 
 	}

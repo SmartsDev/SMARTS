@@ -20,7 +20,7 @@ import traffic.vehicle.VehicleUtil;
  * certain distance. The minimum distance is higher for higher-priority roads.
  * When it is possible to make a turn, vehicles tend to turn to the road with
  * the same or higher priority, e.g., leaving a secondary road and entering a
- * trunk road. 
+ * trunk road.
  *
  */
 public class Simple extends Routing {
@@ -32,7 +32,7 @@ public class Simple extends Routing {
 
 	Random random = new Random();
 	double maxNumLegs = 40;
-	double probTurnToLowerPriorityRoad = 0.1;
+	double probAllowTurnToLowerPriorityRoad = 0.5;
 	double distanceOnCurrentRoad;
 
 	boolean isEdgeEndInRoute(Edge edgeToTest, HashSet<Edge> existingEdgesOnRoute) {
@@ -47,7 +47,7 @@ public class Simple extends Routing {
 		if (nextEdge.type.priority >= lastEdge.type.priority) {
 			return true;
 		} else {
-			if (random.nextDouble() < probTurnToLowerPriorityRoad) {
+			if (random.nextDouble() < probAllowTurnToLowerPriorityRoad) {
 				return true;
 			} else {
 				return false;
@@ -106,7 +106,7 @@ public class Simple extends Routing {
 		}
 
 		// Remove repeated sections
-		// legsOnRoute = RouteUtil.removeRepeatSections(legsOnRoute);
+		legsOnRoute = RouteUtil.removeRepeatSections(legsOnRoute);
 
 		return legsOnRoute;
 	}
@@ -144,7 +144,9 @@ public class Simple extends Routing {
 	}
 
 	Edge findNextEdge(ArrayList<Edge> candidateEdges, Edge lastEdge) {
-		Edge nextEdge = null;
+		if (candidateEdges.size() == 0) {
+			return null;
+		}
 
 		Edge nextEdgeOnSameRoad = null;
 		for (Edge edge : candidateEdges) {
@@ -153,30 +155,26 @@ public class Simple extends Routing {
 				break;
 			}
 		}
-		if (isBeyondMinimumDistanceOnSameRoad(lastEdge) && random.nextBoolean()) {
-			double shortestDist = Double.MAX_VALUE;
-			for (Edge edge : candidateEdges) {
-				double dist = RoadUtil.getDistInMeters(edge.endNode.lat,
-						edge.endNode.lon, lastEdge.endNode.lat,
-						lastEdge.endNode.lon);
-				if (dist < shortestDist) {
-					shortestDist = dist;
-					nextEdge = edge;
-				}
-			}
+
+		Edge nextEdgeOnRoute = null;
+
+		if (isBeyondMinimumDistanceOnSameRoad(lastEdge)
+				|| nextEdgeOnSameRoad == null) {
+			nextEdgeOnRoute = candidateEdges.get(random.nextInt(candidateEdges
+					.size()));
 		} else {
-			nextEdge = nextEdgeOnSameRoad;
+			nextEdgeOnRoute = nextEdgeOnSameRoad;
 		}
 
 		// Update distance value
-		if (nextEdge != null) {
-			if (nextEdge != nextEdgeOnSameRoad) {
-				distanceOnCurrentRoad = nextEdge.length;
+		if (nextEdgeOnRoute != null) {
+			if (nextEdgeOnRoute != nextEdgeOnSameRoad) {
+				distanceOnCurrentRoad = nextEdgeOnRoute.length;
 			} else {
-				distanceOnCurrentRoad += nextEdge.length;
+				distanceOnCurrentRoad += nextEdgeOnRoute.length;
 			}
 		}
 
-		return nextEdge;
+		return nextEdgeOnRoute;
 	}
 }

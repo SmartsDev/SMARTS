@@ -14,13 +14,13 @@ import traffic.vehicle.VehicleType;
 import traffic.vehicle.VehicleUtil;
 
 /**
- * This class computes route based on a light-weight algorithm for generating
- * random traffic. Vehicles tend to stay on roads for a certain distance. The
- * minimum distance is higher for higher-priority roads. When it is possible to
- * change road, vehicles turn to the road link whose end point is closer to the
- * destination than the end points of other road links. This class extends the
- * default Routing class but it does not aim to find an exact route to the given
- * destination. The given destination could be reached with a low probability.
+ * This class creates route based on a light-weight algorithm for generating
+ * random traffic. This algorithm is not for creating exact routes from source
+ * to destination. In this algorithm, vehicles tend to stay on roads for a
+ * certain distance. The minimum distance is higher for higher-priority roads.
+ * When it is possible to make a turn, vehicles tend to turn to the road with
+ * the same or higher priority, e.g., leaving a secondary road and entering a
+ * trunk road. 
  *
  */
 public class Simple extends Routing {
@@ -31,22 +31,35 @@ public class Simple extends Routing {
 	}
 
 	Random random = new Random();
-	double maxRouteLengthFactor = 2;// Maximum ratio of route length over
-									// Euclidean distance between source and
-									// destination
-	double probabilityOfRandomDirection = 0.5;// Chance of picking a random
-												// direction at intersection
+	double maxNumLegs = 40;
+	double probTurnToLowerPriorityRoad = 0.1;
 	double distanceOnCurrentRoad;
+
+	boolean isEdgeEndInRoute(Edge edgeToTest, HashSet<Edge> existingEdgesOnRoute) {
+		for (Edge edge : existingEdgesOnRoute) {
+			if (edgeToTest.endNode == edge.startNode)
+				return true;
+		}
+		return false;
+	}
+
+	boolean isNextEdgeWithProperPriority(Edge lastEdge, Edge nextEdge) {
+		if (nextEdge.type.priority >= lastEdge.type.priority) {
+			return true;
+		} else {
+			if (random.nextDouble() < probTurnToLowerPriorityRoad) {
+				return true;
+			} else {
+				return false;
+			}
+		}
+
+	}
 
 	public ArrayList<RouteLeg> createCompleteRoute(Edge startEdge,
 			Edge endEdge, VehicleType type) {
 		Node currentNode = startEdge.startNode;
 		Node destinationNode = endEdge.endNode;
-
-		// Compute maximum possible route length
-		double EuclideanDistSD = RoadUtil.getDistInMeters(currentNode.lat,
-				currentNode.lon, destinationNode.lat, destinationNode.lon);
-		double maximumRouteLength = EuclideanDistSD * maxRouteLengthFactor;
 
 		ArrayList<RouteLeg> legsOnRoute = new ArrayList<RouteLeg>();
 		legsOnRoute.add(new RouteLeg(startEdge, 0));
@@ -55,7 +68,7 @@ public class Simple extends Routing {
 		HashSet<Edge> existingEdgesOnRoute = new HashSet<Edge>();
 
 		while (currentNode != destinationNode
-				&& RouteUtil.getTotalDistanceOfRoute(legsOnRoute) < maximumRouteLength) {
+				&& legsOnRoute.size() < maxNumLegs) {
 
 			// Last edge on existing route
 			Edge lastEdge = null;
@@ -66,9 +79,9 @@ public class Simple extends Routing {
 			// List of candidate edges
 			ArrayList<Edge> candidateEdgesForNextLeg = new ArrayList<Edge>();
 			for (Edge e : currentNode.outwardEdges) {
-
 				if (VehicleUtil.canGoThrough(e.startNode, e.endNode, type)
-						&& !existingEdgesOnRoute.contains(e)) {
+						&& !isEdgeEndInRoute(e, existingEdgesOnRoute)
+						&& isNextEdgeWithProperPriority(lastEdge, e)) {
 					candidateEdgesForNextLeg.add(e);
 				}
 			}
@@ -93,7 +106,7 @@ public class Simple extends Routing {
 		}
 
 		// Remove repeated sections
-		legsOnRoute = RouteUtil.removeRepeatSections(legsOnRoute);
+		// legsOnRoute = RouteUtil.removeRepeatSections(legsOnRoute);
 
 		return legsOnRoute;
 	}
@@ -119,7 +132,7 @@ public class Simple extends Routing {
 			if (distanceOnCurrentRoad > 200)
 				return true;
 		case unclassified:
-			if (distanceOnCurrentRoad > 100)
+			if (distanceOnCurrentRoad > 50)
 				return true;
 		case service:
 			if (distanceOnCurrentRoad > 20)
@@ -140,25 +153,19 @@ public class Simple extends Routing {
 				break;
 			}
 		}
-		if (nextEdgeOnSameRoad == null
-				|| isBeyondMinimumDistanceOnSameRoad(lastEdge)) {
-
-			if (random.nextBoolean()) {
-				double shortestDist = Double.MAX_VALUE;
-				for (Edge edge : candidateEdges) {
-					double dist = RoadUtil.getDistInMeters(edge.endNode.lat,
-							edge.endNode.lon, lastEdge.endNode.lat,
-							lastEdge.endNode.lon);
-					if (dist < shortestDist) {
-						shortestDist = dist;
-						nextEdge = edge;
-					}
+		if (isBeyondMinimumDistanceOnSameRoad(lastEdge) && random.nextBoolean()) {
+			double shortestDist = Double.MAX_VALUE;
+			for (Edge edge : candidateEdges) {
+				double dist = RoadUtil.getDistInMeters(edge.endNode.lat,
+						edge.endNode.lon, lastEdge.endNode.lat,
+						lastEdge.endNode.lon);
+				if (dist < shortestDist) {
+					shortestDist = dist;
+					nextEdge = edge;
 				}
 			}
-
 		} else {
 			nextEdge = nextEdgeOnSameRoad;
-
 		}
 
 		// Update distance value

@@ -46,14 +46,15 @@ public class Message_SW_Setup {
 	public String outputTrajectoryScope;
 	public String outputRouteScope;
 	public String outputTravelTimeScope;
-	public boolean isOutputSimulationLog = false;
+	public boolean isOutputSimulationLog;
 	public ArrayList<Serializable_GPS_Rectangle> listRouteSourceWindowForInternalVehicle = new ArrayList<>();
 	public ArrayList<Serializable_GPS_Rectangle> listRouteDestinationWindowForInternalVehicle = new ArrayList<>();
 	public ArrayList<Serializable_GPS_Rectangle> listRouteSourceDestinationWindowForInternalVehicle = new ArrayList<>();
-	public boolean isAllowReroute = false;
-	public boolean isAllowTramRule = true;
+	public boolean isAllowReroute;
+	public boolean isAllowTramRule;
 	public boolean isDriveOnLeft;
-
+	public boolean isUseAnyLaneToTurn;
+	
 	public Message_SW_Setup() {
 
 	}
@@ -104,6 +105,7 @@ public class Message_SW_Setup {
 		isAllowReroute = Settings.isAllowReroute;
 		isAllowTramRule = Settings.isAllowTramRule;
 		isDriveOnLeft = Settings.isDriveOnLeft;
+		isUseAnyLaneToTurn=Settings.isUseAnyLaneToTurn;
 	}
 
 	ArrayList<SerializableWorkerMetadata> appendMetadataOfWorkers(

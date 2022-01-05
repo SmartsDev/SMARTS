@@ -526,6 +526,7 @@ public class Worker implements MessageHandler, Runnable {
 		Settings.isAllowReroute = received.isAllowReroute;
 		Settings.isAllowTramRule = received.isAllowTramRule;
 		Settings.isDriveOnLeft = received.isDriveOnLeft;
+		Settings.isUseAnyLaneToTurn=received.isUseAnyLaneToTurn;
 
 		if (received.isNewEnvironment) {
 			if (received.roadGraph.equals("builtin")) {

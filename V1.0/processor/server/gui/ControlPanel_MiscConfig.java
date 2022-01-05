@@ -63,6 +63,7 @@ public class ControlPanel_MiscConfig extends JPanel {
 	private JComboBox comboBoxOutputTravelTime;
 	private JComboBox comboBoxOutputTrajectory;
 	private JComboBox comboBoxOutputRoute;
+	private JCheckBox chckbxAllowTurnFromAnyLane;
 
 	public ControlPanel_MiscConfig(final GUI gui) {
 		this.gui = gui;
@@ -118,36 +119,47 @@ public class ControlPanel_MiscConfig extends JPanel {
 		textField_BackgroundRouteFile.setEditable(false);
 		textField_BackgroundRouteFile.setColumns(10);
 
-		final JLabel lblnumRandomPrivateVehicles = new JLabel("No. of random background private vehicles");
-		lblnumRandomPrivateVehicles.setHorizontalAlignment(SwingConstants.RIGHT);
+		final JLabel lblnumRandomPrivateVehicles = new JLabel(
+				"No. of random background private vehicles");
+		lblnumRandomPrivateVehicles
+				.setHorizontalAlignment(SwingConstants.RIGHT);
 		lblnumRandomPrivateVehicles.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		lblnumRandomPrivateVehicles.setToolTipText("");
 
 		textField_numRandomBackgroundPrivateVehicles = new JTextField();
-		textField_numRandomBackgroundPrivateVehicles.setFont(new Font("Tahoma", Font.PLAIN, 13));
-		textField_numRandomBackgroundPrivateVehicles.setToolTipText("Non-negative integer");
+		textField_numRandomBackgroundPrivateVehicles.setFont(new Font("Tahoma",
+				Font.PLAIN, 13));
+		textField_numRandomBackgroundPrivateVehicles
+				.setToolTipText("Non-negative integer");
 		textField_numRandomBackgroundPrivateVehicles.setText("100");
-		textField_numRandomBackgroundPrivateVehicles.setInputVerifier(new GuiUtil.NonNegativeIntegerVerifier());
+		textField_numRandomBackgroundPrivateVehicles
+				.setInputVerifier(new GuiUtil.NonNegativeIntegerVerifier());
 
-		lblnumRandomTrams = new JLabel("No. of random background trams (if applicable)");
+		lblnumRandomTrams = new JLabel(
+				"No. of random background trams (if applicable)");
 		lblnumRandomTrams.setToolTipText("");
 		lblnumRandomTrams.setHorizontalAlignment(SwingConstants.RIGHT);
 		lblnumRandomTrams.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
 		textField_numRandomBackgroundTrams = new JTextField();
-		textField_numRandomBackgroundTrams.setToolTipText("Non-negative integer");
+		textField_numRandomBackgroundTrams
+				.setToolTipText("Non-negative integer");
 		textField_numRandomBackgroundTrams.setText("5");
-		textField_numRandomBackgroundTrams.setFont(new Font("Tahoma", Font.PLAIN, 13));
+		textField_numRandomBackgroundTrams.setFont(new Font("Tahoma",
+				Font.PLAIN, 13));
 
-		lblnumRandomBuses = new JLabel("No. of random background buses (if applicable)");
+		lblnumRandomBuses = new JLabel(
+				"No. of random background buses (if applicable)");
 		lblnumRandomBuses.setToolTipText("");
 		lblnumRandomBuses.setHorizontalAlignment(SwingConstants.RIGHT);
 		lblnumRandomBuses.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
 		textField_numRandomBackgroundBuses = new JTextField();
-		textField_numRandomBackgroundBuses.setToolTipText("Non-negative integer");
+		textField_numRandomBackgroundBuses
+				.setToolTipText("Non-negative integer");
 		textField_numRandomBackgroundBuses.setText("5");
-		textField_numRandomBackgroundBuses.setFont(new Font("Tahoma", Font.PLAIN, 13));
+		textField_numRandomBackgroundBuses.setFont(new Font("Tahoma",
+				Font.PLAIN, 13));
 
 		final JLabel lblNumberOfSteps = new JLabel("Max number of steps");
 		lblNumberOfSteps.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -158,16 +170,19 @@ public class ControlPanel_MiscConfig extends JPanel {
 		textField_TotalNumSteps.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		textField_TotalNumSteps.setText("18000");
 
-		final JLabel lblNumberOfSteps_1 = new JLabel("Number of steps per second");
+		final JLabel lblNumberOfSteps_1 = new JLabel(
+				"Number of steps per second");
 		lblNumberOfSteps_1.setHorizontalAlignment(SwingConstants.RIGHT);
 		lblNumberOfSteps_1.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
 		textField_NumStepsPerSec = new JTextField();
-		textField_NumStepsPerSec.setToolTipText("Real number between 0.1 and 1000");
+		textField_NumStepsPerSec
+				.setToolTipText("Real number between 0.1 and 1000");
 		textField_NumStepsPerSec.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		textField_NumStepsPerSec.setText("5");
 
-		final JLabel lblLookAheadDist = new JLabel("Look-ahead distance in metres");
+		final JLabel lblLookAheadDist = new JLabel(
+				"Look-ahead distance in metres");
 		lblLookAheadDist.setHorizontalAlignment(SwingConstants.RIGHT);
 		lblLookAheadDist.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
@@ -183,8 +198,10 @@ public class ControlPanel_MiscConfig extends JPanel {
 
 		comboBoxTrafficLight = new JComboBox(new Object[] {});
 		comboBoxTrafficLight.setFont(new Font("Tahoma", Font.PLAIN, 13));
-		comboBoxTrafficLight.setModel(new DefaultComboBoxModel(new String[] { TrafficLightTiming.DYNAMIC.name(),
-				TrafficLightTiming.FIXED.name(), TrafficLightTiming.NONE.name() }));
+		comboBoxTrafficLight.setModel(new DefaultComboBoxModel(
+				new String[] { TrafficLightTiming.DYNAMIC.name(),
+						TrafficLightTiming.FIXED.name(),
+						TrafficLightTiming.NONE.name() }));
 		comboBoxTrafficLight.setSelectedIndex(1);
 
 		final JLabel lblRouting = new JLabel("Routing algorithm for new routes");
@@ -192,7 +209,8 @@ public class ControlPanel_MiscConfig extends JPanel {
 		lblRouting.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
 		comboBoxRouting = new JComboBox(new Object[] {});
-		comboBoxRouting.setModel(new DefaultComboBoxModel(new String[] { "DIJKSTRA", "RANDOM_A_STAR", "SIMPLE" }));
+		comboBoxRouting.setModel(new DefaultComboBoxModel(new String[] {
+				"DIJKSTRA", "RANDOM_A_STAR", "SIMPLE" }));
 		comboBoxRouting.setSelectedIndex(0);
 		comboBoxRouting.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		final GridBagConstraints gbc_chckbxIncludePublicVehicles = new GridBagConstraints();
@@ -220,7 +238,8 @@ public class ControlPanel_MiscConfig extends JPanel {
 		gbc_chckbxTramGiveway.gridx = 1;
 		gbc_chckbxTramGiveway.gridy = 14;
 
-		final JCheckBox chckbxOutputLog = new JCheckBox("Output simulation log (average travel speed, etc.)");
+		final JCheckBox chckbxOutputLog = new JCheckBox(
+				"Output simulation log (average travel speed, etc.)");
 		chckbxOutputLog.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		chckbxOutputLog.addActionListener(new ActionListener() {
 			@Override
@@ -241,9 +260,10 @@ public class ControlPanel_MiscConfig extends JPanel {
 			}
 		});
 
-		chckbxExternalReroute = new JCheckBox("Route-change/vehicle removal in heavy congestions");
-		chckbxExternalReroute.setToolTipText(
-				"A vehicle can change route in heavy congestion. The vehicle can end its trip early if it had changed the route for a number of times.");
+		chckbxExternalReroute = new JCheckBox(
+				"Route-change/vehicle removal in heavy congestions");
+		chckbxExternalReroute
+				.setToolTipText("A vehicle can change route in heavy congestion. The vehicle can end its trip early if it had changed the route for a number of times.");
 		chckbxExternalReroute.addActionListener(new ActionListener() {
 
 			public void actionPerformed(final ActionEvent e) {
@@ -284,209 +304,568 @@ public class ControlPanel_MiscConfig extends JPanel {
 		});
 
 		comboBoxOutputTrajectory = new JComboBox();
-		comboBoxOutputTrajectory
-				.setModel(new DefaultComboBoxModel(new String[] { "NONE", "FOREGROUND", "BACKGROUND", "ALL" }));
+		comboBoxOutputTrajectory.setModel(new DefaultComboBoxModel(
+				new String[] { "NONE", "FOREGROUND", "BACKGROUND", "ALL" }));
 
 		JLabel lblOutputTrajectories = new JLabel("Output trajectories");
 
 		JLabel lblOutputRoutes = new JLabel("Output initial routes");
 
 		comboBoxOutputRoute = new JComboBox();
-		comboBoxOutputRoute
-				.setModel(new DefaultComboBoxModel(new String[] { "NONE", "FOREGROUND", "BACKGROUND", "ALL" }));
+		comboBoxOutputRoute.setModel(new DefaultComboBoxModel(new String[] {
+				"NONE", "FOREGROUND", "BACKGROUND", "ALL" }));
 
 		lblOutputTravelTimes = new JLabel("Output travel times");
 
 		comboBoxOutputTravelTime = new JComboBox();
-		comboBoxOutputTravelTime
-				.setModel(new DefaultComboBoxModel(new String[] { "NONE", "FOREGROUND", "BACKGROUND", "ALL" }));
+		comboBoxOutputTravelTime.setModel(new DefaultComboBoxModel(
+				new String[] { "NONE", "FOREGROUND", "BACKGROUND", "ALL" }));
 
+		chckbxAllowTurnFromAnyLane = new JCheckBox("Allow turn from any lane");
+		chckbxAllowTurnFromAnyLane.setSelected(true);
+		chckbxAllowTurnFromAnyLane
+				.setToolTipText("Check this if vehicles can make turn in any lane in a multi-lane road. Uncheck if vehicles can only make turn from certain lanes, e.g., turn left from the left-most lane.");
+		chckbxAllowTurnFromAnyLane.addActionListener(new ActionListener() {
+			public void actionPerformed(final ActionEvent e) {
+				Settings.isUseAnyLaneToTurn = chckbxAllowTurnFromAnyLane.isSelected();
+			}
+		});
+		
+		
 		GroupLayout groupLayout = new GroupLayout(this);
-		groupLayout.setHorizontalGroup(
-			groupLayout.createParallelGroup(Alignment.LEADING)
-				.addGroup(groupLayout.createSequentialGroup()
-					.addGap(20)
-					.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-						.addGroup(groupLayout.createSequentialGroup()
-							.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-								.addComponent(chckbxOutputLog)
-								.addComponent(chckbxExternalReroute))
-							.addContainerGap())
-						.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-							.addGroup(groupLayout.createSequentialGroup()
-								.addComponent(chckbxServerbased)
-								.addContainerGap())
-							.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-								.addGroup(groupLayout.createSequentialGroup()
-									.addComponent(lblOutputTrajectories)
-									.addPreferredGap(ComponentPlacement.RELATED)
-									.addComponent(comboBoxOutputTrajectory, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-									.addContainerGap())
-								.addGroup(groupLayout.createSequentialGroup()
-									.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-										.addComponent(lblOutputRoutes, GroupLayout.DEFAULT_SIZE, 126, Short.MAX_VALUE)
-										.addComponent(lblOutputTravelTimes, GroupLayout.PREFERRED_SIZE, 126, GroupLayout.PREFERRED_SIZE))
-									.addPreferredGap(ComponentPlacement.RELATED)
-									.addGroup(groupLayout.createParallelGroup(Alignment.LEADING, false)
-										.addComponent(comboBoxOutputTravelTime, 0, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-										.addComponent(comboBoxOutputRoute, 0, 119, Short.MAX_VALUE))
-									.addGap(199))
-								.addGroup(groupLayout.createSequentialGroup()
-									.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-										.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-											.addGroup(groupLayout.createSequentialGroup()
-												.addComponent(lblRouting)
-												.addPreferredGap(ComponentPlacement.RELATED)
-												.addComponent(comboBoxRouting, GroupLayout.PREFERRED_SIZE, 142, GroupLayout.PREFERRED_SIZE))
-											.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-												.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-													.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-														.addGroup(groupLayout.createSequentialGroup()
-															.addComponent(lblNumberOfSteps_1)
-															.addPreferredGap(ComponentPlacement.RELATED)
-															.addComponent(textField_NumStepsPerSec, GroupLayout.PREFERRED_SIZE, 46, GroupLayout.PREFERRED_SIZE))
-														.addGroup(groupLayout.createSequentialGroup()
-															.addComponent(rdbtnLeftDrive, GroupLayout.DEFAULT_SIZE, 144, Short.MAX_VALUE)
-															.addPreferredGap(ComponentPlacement.RELATED)
-															.addComponent(rdbtnRightDrive, GroupLayout.PREFERRED_SIZE, 148, GroupLayout.PREFERRED_SIZE)
-															.addGap(90))
-														.addComponent(btnSetupWorkers, GroupLayout.PREFERRED_SIZE, 144, GroupLayout.PREFERRED_SIZE)
-														.addGroup(groupLayout.createSequentialGroup()
-															.addComponent(lblnumRandomPrivateVehicles)
-															.addPreferredGap(ComponentPlacement.RELATED)
-															.addComponent(textField_numRandomBackgroundPrivateVehicles, GroupLayout.PREFERRED_SIZE, 51, GroupLayout.PREFERRED_SIZE))
-														.addGroup(groupLayout.createSequentialGroup()
-															.addGroup(groupLayout.createParallelGroup(Alignment.TRAILING)
-																.addComponent(lblBackgroundRouteFile)
-																.addComponent(lblForegroundRouteFile))
-															.addGap(18)
-															.addGroup(groupLayout.createParallelGroup(Alignment.LEADING, false)
-																.addComponent(textField_ForegroundRouteFile)
-																.addComponent(textField_BackgroundRouteFile, GroupLayout.DEFAULT_SIZE, 134, Short.MAX_VALUE))
-															.addPreferredGap(ComponentPlacement.RELATED)
-															.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-																.addComponent(btnLoadBackgroundVehicles)
-																.addComponent(btnLoadForegroundVehicles))))
-													.addGroup(groupLayout.createParallelGroup(Alignment.LEADING, false)
-														.addGroup(groupLayout.createSequentialGroup()
-															.addComponent(lblTrafficLights)
-															.addPreferredGap(ComponentPlacement.RELATED)
-															.addComponent(comboBoxTrafficLight, 0, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-														.addGroup(groupLayout.createSequentialGroup()
-															.addComponent(lblLookAheadDist)
-															.addPreferredGap(ComponentPlacement.RELATED)
-															.addComponent(textField_lookAheadDist, GroupLayout.PREFERRED_SIZE, 51, GroupLayout.PREFERRED_SIZE))))
-												.addGroup(groupLayout.createParallelGroup(Alignment.LEADING, false)
-													.addGroup(groupLayout.createSequentialGroup()
-														.addComponent(lblnumRandomBuses)
-														.addPreferredGap(ComponentPlacement.RELATED)
-														.addComponent(textField_numRandomBackgroundBuses))
-													.addGroup(groupLayout.createSequentialGroup()
-														.addComponent(lblnumRandomTrams)
-														.addPreferredGap(ComponentPlacement.RELATED)
-														.addComponent(textField_numRandomBackgroundTrams, GroupLayout.PREFERRED_SIZE, 35, GroupLayout.PREFERRED_SIZE)))))
-										.addGroup(groupLayout.createSequentialGroup()
-											.addComponent(lblNumberOfSteps)
-											.addPreferredGap(ComponentPlacement.RELATED)
-											.addComponent(textField_TotalNumSteps, GroupLayout.PREFERRED_SIZE, 76, GroupLayout.PREFERRED_SIZE)))
-									.addGap(67))))))
-		);
-		groupLayout.setVerticalGroup(
-			groupLayout.createParallelGroup(Alignment.LEADING)
-				.addGroup(groupLayout.createSequentialGroup()
-					.addContainerGap()
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(rdbtnLeftDrive)
-						.addComponent(rdbtnRightDrive))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(textField_ForegroundRouteFile, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(btnLoadForegroundVehicles)
-						.addComponent(lblForegroundRouteFile))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblBackgroundRouteFile)
-						.addComponent(textField_BackgroundRouteFile, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(btnLoadBackgroundVehicles))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblnumRandomPrivateVehicles, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
-						.addComponent(textField_numRandomBackgroundPrivateVehicles, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblnumRandomTrams)
-						.addComponent(textField_numRandomBackgroundTrams, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblnumRandomBuses)
-						.addComponent(textField_numRandomBackgroundBuses, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblNumberOfSteps, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
-						.addComponent(textField_TotalNumSteps, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblNumberOfSteps_1, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
-						.addComponent(textField_NumStepsPerSec, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblLookAheadDist, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
-						.addComponent(textField_lookAheadDist, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(comboBoxTrafficLight, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-						.addComponent(lblTrafficLights, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblRouting)
-						.addComponent(comboBoxRouting, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE))
-					.addPreferredGap(ComponentPlacement.UNRELATED)
-					.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
-						.addComponent(lblOutputTrajectories)
-						.addComponent(comboBoxOutputTrajectory, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addGap(10)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblOutputRoutes)
-						.addComponent(comboBoxOutputRoute, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addGap(16)
-					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
-						.addComponent(lblOutputTravelTimes)
-						.addComponent(comboBoxOutputTravelTime, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addGap(12)
-					.addComponent(chckbxServerbased)
-					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(chckbxOutputLog)
-					.addPreferredGap(ComponentPlacement.UNRELATED)
-					.addComponent(chckbxExternalReroute)
-					.addGap(18)
-					.addComponent(btnSetupWorkers)
-					.addContainerGap(140, Short.MAX_VALUE))
-		);
+		groupLayout
+				.setHorizontalGroup(groupLayout
+						.createParallelGroup(Alignment.LEADING)
+						.addGroup(
+								groupLayout
+										.createSequentialGroup()
+										.addGap(20)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.LEADING)
+														.addGroup(
+																groupLayout
+																		.createSequentialGroup()
+																		.addComponent(
+																				chckbxAllowTurnFromAnyLane)
+																		.addContainerGap())
+														.addGroup(
+																groupLayout
+																		.createParallelGroup(
+																				Alignment.LEADING)
+																		.addGroup(
+																				groupLayout
+																						.createSequentialGroup()
+																						.addComponent(
+																								btnSetupWorkers,
+																								GroupLayout.PREFERRED_SIZE,
+																								144,
+																								GroupLayout.PREFERRED_SIZE)
+																						.addContainerGap())
+																		.addGroup(
+																				groupLayout
+																						.createParallelGroup(
+																								Alignment.LEADING)
+																						.addGroup(
+																								groupLayout
+																										.createSequentialGroup()
+																										.addGroup(
+																												groupLayout
+																														.createParallelGroup(
+																																Alignment.LEADING)
+																														.addComponent(
+																																chckbxOutputLog)
+																														.addComponent(
+																																chckbxExternalReroute))
+																										.addContainerGap())
+																						.addGroup(
+																								groupLayout
+																										.createParallelGroup(
+																												Alignment.LEADING)
+																										.addGroup(
+																												groupLayout
+																														.createSequentialGroup()
+																														.addComponent(
+																																chckbxServerbased)
+																														.addContainerGap())
+																										.addGroup(
+																												groupLayout
+																														.createParallelGroup(
+																																Alignment.LEADING)
+																														.addGroup(
+																																groupLayout
+																																		.createSequentialGroup()
+																																		.addComponent(
+																																				lblOutputTrajectories)
+																																		.addPreferredGap(
+																																				ComponentPlacement.RELATED)
+																																		.addComponent(
+																																				comboBoxOutputTrajectory,
+																																				GroupLayout.PREFERRED_SIZE,
+																																				GroupLayout.DEFAULT_SIZE,
+																																				GroupLayout.PREFERRED_SIZE)
+																																		.addContainerGap())
+																														.addGroup(
+																																groupLayout
+																																		.createSequentialGroup()
+																																		.addGroup(
+																																				groupLayout
+																																						.createParallelGroup(
+																																								Alignment.LEADING)
+																																						.addComponent(
+																																								lblOutputRoutes,
+																																								GroupLayout.DEFAULT_SIZE,
+																																								126,
+																																								Short.MAX_VALUE)
+																																						.addComponent(
+																																								lblOutputTravelTimes,
+																																								GroupLayout.PREFERRED_SIZE,
+																																								126,
+																																								GroupLayout.PREFERRED_SIZE))
+																																		.addPreferredGap(
+																																				ComponentPlacement.RELATED)
+																																		.addGroup(
+																																				groupLayout
+																																						.createParallelGroup(
+																																								Alignment.LEADING,
+																																								false)
+																																						.addComponent(
+																																								comboBoxOutputTravelTime,
+																																								0,
+																																								GroupLayout.DEFAULT_SIZE,
+																																								Short.MAX_VALUE)
+																																						.addComponent(
+																																								comboBoxOutputRoute,
+																																								0,
+																																								119,
+																																								Short.MAX_VALUE))
+																																		.addGap(199))
+																														.addGroup(
+																																groupLayout
+																																		.createSequentialGroup()
+																																		.addGroup(
+																																				groupLayout
+																																						.createParallelGroup(
+																																								Alignment.LEADING)
+																																						.addGroup(
+																																								groupLayout
+																																										.createParallelGroup(
+																																												Alignment.LEADING)
+																																										.addGroup(
+																																												groupLayout
+																																														.createSequentialGroup()
+																																														.addComponent(
+																																																lblRouting)
+																																														.addPreferredGap(
+																																																ComponentPlacement.RELATED)
+																																														.addComponent(
+																																																comboBoxRouting,
+																																																GroupLayout.PREFERRED_SIZE,
+																																																142,
+																																																GroupLayout.PREFERRED_SIZE))
+																																										.addGroup(
+																																												groupLayout
+																																														.createParallelGroup(
+																																																Alignment.LEADING)
+																																														.addGroup(
+																																																groupLayout
+																																																		.createParallelGroup(
+																																																				Alignment.LEADING)
+																																																		.addGroup(
+																																																				groupLayout
+																																																						.createParallelGroup(
+																																																								Alignment.LEADING)
+																																																						.addGroup(
+																																																								groupLayout
+																																																										.createSequentialGroup()
+																																																										.addComponent(
+																																																												lblNumberOfSteps_1)
+																																																										.addPreferredGap(
+																																																												ComponentPlacement.RELATED)
+																																																										.addComponent(
+																																																												textField_NumStepsPerSec,
+																																																												GroupLayout.PREFERRED_SIZE,
+																																																												46,
+																																																												GroupLayout.PREFERRED_SIZE))
+																																																						.addGroup(
+																																																								groupLayout
+																																																										.createSequentialGroup()
+																																																										.addComponent(
+																																																												rdbtnLeftDrive,
+																																																												GroupLayout.DEFAULT_SIZE,
+																																																												144,
+																																																												Short.MAX_VALUE)
+																																																										.addPreferredGap(
+																																																												ComponentPlacement.RELATED)
+																																																										.addComponent(
+																																																												rdbtnRightDrive,
+																																																												GroupLayout.PREFERRED_SIZE,
+																																																												148,
+																																																												GroupLayout.PREFERRED_SIZE)
+																																																										.addGap(90))
+																																																						.addGroup(
+																																																								groupLayout
+																																																										.createSequentialGroup()
+																																																										.addComponent(
+																																																												lblnumRandomPrivateVehicles)
+																																																										.addPreferredGap(
+																																																												ComponentPlacement.RELATED)
+																																																										.addComponent(
+																																																												textField_numRandomBackgroundPrivateVehicles,
+																																																												GroupLayout.PREFERRED_SIZE,
+																																																												51,
+																																																												GroupLayout.PREFERRED_SIZE))
+																																																						.addGroup(
+																																																								groupLayout
+																																																										.createSequentialGroup()
+																																																										.addGroup(
+																																																												groupLayout
+																																																														.createParallelGroup(
+																																																																Alignment.TRAILING)
+																																																														.addComponent(
+																																																																lblBackgroundRouteFile)
+																																																														.addComponent(
+																																																																lblForegroundRouteFile))
+																																																										.addGap(18)
+																																																										.addGroup(
+																																																												groupLayout
+																																																														.createParallelGroup(
+																																																																Alignment.LEADING,
+																																																																false)
+																																																														.addComponent(
+																																																																textField_ForegroundRouteFile)
+																																																														.addComponent(
+																																																																textField_BackgroundRouteFile,
+																																																																GroupLayout.DEFAULT_SIZE,
+																																																																134,
+																																																																Short.MAX_VALUE))
+																																																										.addPreferredGap(
+																																																												ComponentPlacement.RELATED)
+																																																										.addGroup(
+																																																												groupLayout
+																																																														.createParallelGroup(
+																																																																Alignment.LEADING)
+																																																														.addComponent(
+																																																																btnLoadBackgroundVehicles)
+																																																														.addComponent(
+																																																																btnLoadForegroundVehicles))))
+																																																		.addGroup(
+																																																				groupLayout
+																																																						.createParallelGroup(
+																																																								Alignment.LEADING,
+																																																								false)
+																																																						.addGroup(
+																																																								groupLayout
+																																																										.createSequentialGroup()
+																																																										.addComponent(
+																																																												lblTrafficLights)
+																																																										.addPreferredGap(
+																																																												ComponentPlacement.RELATED)
+																																																										.addComponent(
+																																																												comboBoxTrafficLight,
+																																																												0,
+																																																												GroupLayout.DEFAULT_SIZE,
+																																																												Short.MAX_VALUE))
+																																																						.addGroup(
+																																																								groupLayout
+																																																										.createSequentialGroup()
+																																																										.addComponent(
+																																																												lblLookAheadDist)
+																																																										.addPreferredGap(
+																																																												ComponentPlacement.RELATED)
+																																																										.addComponent(
+																																																												textField_lookAheadDist,
+																																																												GroupLayout.PREFERRED_SIZE,
+																																																												51,
+																																																												GroupLayout.PREFERRED_SIZE))))
+																																														.addGroup(
+																																																groupLayout
+																																																		.createParallelGroup(
+																																																				Alignment.LEADING,
+																																																				false)
+																																																		.addGroup(
+																																																				groupLayout
+																																																						.createSequentialGroup()
+																																																						.addComponent(
+																																																								lblnumRandomBuses)
+																																																						.addPreferredGap(
+																																																								ComponentPlacement.RELATED)
+																																																						.addComponent(
+																																																								textField_numRandomBackgroundBuses))
+																																																		.addGroup(
+																																																				groupLayout
+																																																						.createSequentialGroup()
+																																																						.addComponent(
+																																																								lblnumRandomTrams)
+																																																						.addPreferredGap(
+																																																								ComponentPlacement.RELATED)
+																																																						.addComponent(
+																																																								textField_numRandomBackgroundTrams,
+																																																								GroupLayout.PREFERRED_SIZE,
+																																																								35,
+																																																								GroupLayout.PREFERRED_SIZE)))))
+																																						.addGroup(
+																																								groupLayout
+																																										.createSequentialGroup()
+																																										.addComponent(
+																																												lblNumberOfSteps)
+																																										.addPreferredGap(
+																																												ComponentPlacement.RELATED)
+																																										.addComponent(
+																																												textField_TotalNumSteps,
+																																												GroupLayout.PREFERRED_SIZE,
+																																												76,
+																																												GroupLayout.PREFERRED_SIZE)))
+																																		.addGap(67)))))))));
+		groupLayout
+				.setVerticalGroup(groupLayout
+						.createParallelGroup(Alignment.LEADING)
+						.addGroup(
+								groupLayout
+										.createSequentialGroup()
+										.addContainerGap()
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																rdbtnLeftDrive)
+														.addComponent(
+																rdbtnRightDrive))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																textField_ForegroundRouteFile,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																btnLoadForegroundVehicles)
+														.addComponent(
+																lblForegroundRouteFile))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblBackgroundRouteFile)
+														.addComponent(
+																textField_BackgroundRouteFile,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																btnLoadBackgroundVehicles))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblnumRandomPrivateVehicles,
+																GroupLayout.PREFERRED_SIZE,
+																22,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																textField_numRandomBackgroundPrivateVehicles,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblnumRandomTrams)
+														.addComponent(
+																textField_numRandomBackgroundTrams,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblnumRandomBuses)
+														.addComponent(
+																textField_numRandomBackgroundBuses,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblNumberOfSteps,
+																GroupLayout.PREFERRED_SIZE,
+																22,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																textField_TotalNumSteps,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblNumberOfSteps_1,
+																GroupLayout.PREFERRED_SIZE,
+																22,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																textField_NumStepsPerSec,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblLookAheadDist,
+																GroupLayout.PREFERRED_SIZE,
+																22,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																textField_lookAheadDist,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																comboBoxTrafficLight,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE)
+														.addComponent(
+																lblTrafficLights,
+																GroupLayout.PREFERRED_SIZE,
+																22,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblRouting)
+														.addComponent(
+																comboBoxRouting,
+																GroupLayout.PREFERRED_SIZE,
+																22,
+																GroupLayout.PREFERRED_SIZE))
+										.addPreferredGap(
+												ComponentPlacement.UNRELATED)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.LEADING)
+														.addComponent(
+																lblOutputTrajectories)
+														.addComponent(
+																comboBoxOutputTrajectory,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addGap(10)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblOutputRoutes)
+														.addComponent(
+																comboBoxOutputRoute,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addGap(16)
+										.addGroup(
+												groupLayout
+														.createParallelGroup(
+																Alignment.BASELINE)
+														.addComponent(
+																lblOutputTravelTimes)
+														.addComponent(
+																comboBoxOutputTravelTime,
+																GroupLayout.PREFERRED_SIZE,
+																GroupLayout.DEFAULT_SIZE,
+																GroupLayout.PREFERRED_SIZE))
+										.addGap(12)
+										.addComponent(chckbxServerbased)
+										.addPreferredGap(
+												ComponentPlacement.RELATED)
+										.addComponent(chckbxOutputLog)
+										.addPreferredGap(
+												ComponentPlacement.UNRELATED)
+										.addComponent(chckbxExternalReroute)
+										.addPreferredGap(
+												ComponentPlacement.UNRELATED)
+										.addComponent(
+												chckbxAllowTurnFromAnyLane)
+										.addGap(21)
+										.addComponent(btnSetupWorkers)
+										.addContainerGap(107, Short.MAX_VALUE)));
 		setLayout(groupLayout);
 
 	}
 
 	void refreshFileLabels() {
-		textField_ForegroundRouteFile.setText(Settings.inputForegroundVehicleFile);
-		textField_BackgroundRouteFile.setText(Settings.inputBackgroundVehicleFile);
+		textField_ForegroundRouteFile
+				.setText(Settings.inputForegroundVehicleFile);
+		textField_BackgroundRouteFile
+				.setText(Settings.inputBackgroundVehicleFile);
 	}
 
 	boolean verifyParameterInput() {
 		boolean isParametersValid = true;
 		GuiUtil.NonNegativeIntegerVerifier nonNegativeIntegerVerifier = new GuiUtil.NonNegativeIntegerVerifier();
-		if (!nonNegativeIntegerVerifier.verify(textField_numRandomBackgroundPrivateVehicles)) {
-			textField_numRandomBackgroundPrivateVehicles.setBackground(Color.RED);
+		if (!nonNegativeIntegerVerifier
+				.verify(textField_numRandomBackgroundPrivateVehicles)) {
+			textField_numRandomBackgroundPrivateVehicles
+					.setBackground(Color.RED);
 			isParametersValid = false;
 		} else {
-			textField_numRandomBackgroundPrivateVehicles.setBackground(Color.WHITE);
+			textField_numRandomBackgroundPrivateVehicles
+					.setBackground(Color.WHITE);
 		}
-		if (!nonNegativeIntegerVerifier.verify(textField_numRandomBackgroundTrams)) {
+		if (!nonNegativeIntegerVerifier
+				.verify(textField_numRandomBackgroundTrams)) {
 			textField_numRandomBackgroundTrams.setBackground(Color.RED);
 			isParametersValid = false;
 		} else {
 			textField_numRandomBackgroundTrams.setBackground(Color.WHITE);
 		}
-		if (!nonNegativeIntegerVerifier.verify(textField_numRandomBackgroundBuses)) {
+		if (!nonNegativeIntegerVerifier
+				.verify(textField_numRandomBackgroundBuses)) {
 			textField_numRandomBackgroundBuses.setBackground(Color.RED);
 			isParametersValid = false;
 		} else {
@@ -527,19 +906,34 @@ public class ControlPanel_MiscConfig extends JPanel {
 		// Disable setup panel
 		GuiUtil.setEnabledStatusOfComponents(this, false);
 
-		Settings.numGlobalRandomBackgroundPrivateVehicles = Integer.parseInt(textField_numRandomBackgroundPrivateVehicles.getText());
-		Settings.numGlobalBackgroundRandomTrams = Integer.parseInt(textField_numRandomBackgroundTrams.getText());
-		Settings.numGlobalBackgroundRandomBuses = Integer.parseInt(textField_numRandomBackgroundBuses.getText());
-		Settings.maxNumSteps = Integer.parseInt(textField_TotalNumSteps.getText());
-		Settings.numStepsPerSecond = Double.parseDouble(textField_NumStepsPerSec.getText());
-		Settings.lookAheadDistance = Double.parseDouble(textField_lookAheadDist.getText());
-		Settings.trafficLightTiming = LightUtil.getLightTypeFromString((String) comboBoxTrafficLight.getSelectedItem());
-		Settings.routingAlgorithm = RouteUtil.getRoutingAlgorithmFromString((String) comboBoxRouting.getSelectedItem());
-		Settings.outputRouteScope = FileOutput.getScopeFromString((String) comboBoxOutputRoute.getSelectedItem());
+		Settings.numGlobalRandomBackgroundPrivateVehicles = Integer
+				.parseInt(textField_numRandomBackgroundPrivateVehicles
+						.getText());
+		Settings.numGlobalBackgroundRandomTrams = Integer
+				.parseInt(textField_numRandomBackgroundTrams.getText());
+		Settings.numGlobalBackgroundRandomBuses = Integer
+				.parseInt(textField_numRandomBackgroundBuses.getText());
+		Settings.maxNumSteps = Integer.parseInt(textField_TotalNumSteps
+				.getText());
+		Settings.numStepsPerSecond = Double
+				.parseDouble(textField_NumStepsPerSec.getText());
+		Settings.lookAheadDistance = Double.parseDouble(textField_lookAheadDist
+				.getText());
+		Settings.trafficLightTiming = LightUtil
+				.getLightTypeFromString((String) comboBoxTrafficLight
+						.getSelectedItem());
+		Settings.routingAlgorithm = RouteUtil
+				.getRoutingAlgorithmFromString((String) comboBoxRouting
+						.getSelectedItem());
+		Settings.outputRouteScope = FileOutput
+				.getScopeFromString((String) comboBoxOutputRoute
+						.getSelectedItem());
 		Settings.outputTrajectoryScope = FileOutput
-				.getScopeFromString((String) comboBoxOutputTrajectory.getSelectedItem());
+				.getScopeFromString((String) comboBoxOutputTrajectory
+						.getSelectedItem());
 		Settings.outputTravelTimeScope = FileOutput
-				.getScopeFromString((String) comboBoxOutputTravelTime.getSelectedItem());
+				.getScopeFromString((String) comboBoxOutputTravelTime
+						.getSelectedItem());
 
 		gui.server.setupNewSim();
 		monitor.startSetupProgress();

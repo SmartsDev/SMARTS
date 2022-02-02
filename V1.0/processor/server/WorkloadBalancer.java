@@ -114,21 +114,13 @@ public class WorkloadBalancer {
 
 
 		final GridCell[][] grid = roadNetwork.grid;
-		if(Settings.partitionType.equals("GridGraph") && Settings.numWorkers>1) {
-			GraphGenerator graph;
-			List<IntSet> parts;
-			Map<String,GridCell> gridCells  = new HashMap<>();
-			for (int row = 0; row < Settings.numGridRows; row++) {
-				for (int col = 0; col < Settings.numGridCols; col++) {
 
-					gridCells.put(grid[row][col].id,grid[row][col]);
-				}
-			}
-			graph = new GraphGenerator();
-			graph.buildGridGraph(gridCells);
-			parts = graph.computePartitions(Settings.numWorkers,gridCells);
-			Map<Integer,Set<String>> partCellsIds = balanceByMETIS( parts, graph.cellGraphIndex);
-			assignPartitionsToWorkers(partCellsIds,workers,grid);
+
+		if(Settings.partitionType.equals("GridGraph") && Settings.numWorkers>1) {
+
+			GraphGenerator graph = new GraphGenerator(grid);
+			Map<Integer,Set<String>> partCellsIds = graph.balance();
+			assignPartitionsToWorkers(partCellsIds,workers,grid, roadNetwork.laneLengthWholeMap);
 		}
 		else
 			balanceByLaneLength(grid,workers,roadNetwork);
@@ -138,9 +130,10 @@ public class WorkloadBalancer {
 			System.out.println("Worker " + worker.name + "'s area has " + worker.workarea.workCells.size() + " cells.");
 		}
 
+
 	}
 
-	private static void assignPartitionsToWorkers(Map<Integer, Set<String>> partCellsIds, ArrayList<WorkerMeta> workers,GridCell[][] grid) {
+	private static void assignPartitionsToWorkers(Map<Integer, Set<String>> partCellsIds, ArrayList<WorkerMeta> workers,GridCell[][] grid, double laneLengthWholeMap ) {
 
 		Map<Integer,Set<GridCell>> partitions = new HashMap<>();
 		for(Integer part: partCellsIds.keySet()){
@@ -150,30 +143,34 @@ public class WorkloadBalancer {
 				int i = Integer.parseInt(id[0]);
 				int j = Integer.parseInt(id[1]);
 				cells.add(grid[i][j]);
+
 			}
 			partitions.put(part,cells);
 		}
+
+
 		int index = 0;
+		int totalLaneLengthInCurrentWorkarea;
 		for (final WorkerMeta worker : workers) {
 			index++;
 			worker.workarea.workCells.clear();
 			worker.workarea.workCells.addAll(partitions.get(index));
+			totalLaneLengthInCurrentWorkarea  = 0;
+			for (GridCell c: worker.workarea.workCells){
+				totalLaneLengthInCurrentWorkarea = totalLaneLengthInCurrentWorkarea + c.laneLength;
+			}
+			worker.laneLengthRatioAgainstWholeMap = totalLaneLengthInCurrentWorkarea/laneLengthWholeMap;
 
 		}
+
 	}
 
 	private static void balanceByLaneLength(GridCell[][] grid, ArrayList<WorkerMeta> workers, RoadNetwork roadNetwork) {
 		for (final WorkerMeta worker : workers) {
 			worker.workarea.workCells.clear();
 		}
-		double laneLengthWholeMap = 0;
-		for (int i = 0; i < Settings.numGridRows; i++) {
-			for (int j = 0; j < Settings.numGridCols; j++) {
-				laneLengthWholeMap += grid[i][j].laneLength;
-			}
-		}
 
-		final double optimalLaneLengthPerWorker = laneLengthWholeMap / Settings.numWorkers;
+		final double optimalLaneLengthPerWorker = roadNetwork.laneLengthWholeMap / Settings.numWorkers;
 
 		int totalLaneLengthInCurrentWorkarea = 0;
 		int workerIndex = 0;
@@ -189,7 +186,7 @@ public class WorkloadBalancer {
 						workers.get(workerIndex).workarea.workCells.add(grid[row][col]);
 						// Update lane length ratio (roads in current worker vs. whole map)
 						workers.get(workerIndex).laneLengthRatioAgainstWholeMap = totalLaneLengthInCurrentWorkarea
-								/ laneLengthWholeMap;
+								/ roadNetwork.laneLengthWholeMap;
 						workerIndex++;
 						totalLaneLengthInCurrentWorkarea = 0;
 					} else {
@@ -204,33 +201,10 @@ public class WorkloadBalancer {
 					workers.get(workerIndex).workarea.workCells.add(grid[row][col]);
 					// Update lane length ratio (roads in current worker vs. whole map)
 					workers.get(workerIndex).laneLengthRatioAgainstWholeMap = totalLaneLengthInCurrentWorkarea
-							/ laneLengthWholeMap;
+							/ roadNetwork.laneLengthWholeMap;
 				}
 
 			}
 		}
-	}
-	private static Map<Integer,Set<String>> balanceByMETIS(List<IntSet> parts,  Map<GridCell, Integer> cellGraphIndex) {
-		Map<Integer,Set<String>> cellsParts = new HashMap<>();
-
-		ArrayList<int[]> partitions = new ArrayList<>();
-		for( IntSet item: parts){
-			partitions.add(item.toIntArray());
-		}
-
-		for (int groupId = 0; groupId < partitions.size(); groupId++) {
-			Set<String> cells = new HashSet<>();
-			for (int cellIndex : partitions.get(groupId)) {
-
-
-				cells.add(Objects.requireNonNull(GraphGenerator.getKey(cellGraphIndex, cellIndex)).id);
-			}
-			cellsParts.put((groupId+1),cells);
-
-		}
-
-
-		return cellsParts;
-
 	}
 }

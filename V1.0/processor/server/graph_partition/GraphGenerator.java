@@ -1,5 +1,6 @@
 package processor.server.graph_partition;
 
+import common.Settings;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
@@ -13,8 +14,17 @@ import java.util.*;
 public class GraphGenerator {
     Graph<Integer, DefaultWeightedEdge> graph ;
     public Map<GridCell,Integer> cellGraphIndex = new HashMap<>();
+    Map<String,GridCell> gridCells;
     private final Random r = new Random();
-    public GraphGenerator() {
+    public GraphGenerator(GridCell[][] grid) {
+
+        gridCells  = new HashMap<>();
+        for (int row = 0; row < Settings.numGridRows; row++) {
+            for (int col = 0; col < Settings.numGridCols; col++) {
+                gridCells.put(grid[row][col].id,grid[row][col]);
+            }
+        }
+
         this.graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
     }
     
@@ -90,6 +100,36 @@ public class GraphGenerator {
         Collection<IntSet> sets = new Metis().compute(this.graph, cellGraphIndex, numParts, new Random(), workCellsSet);
 
         return new ArrayList<>(sets);
+
+    }
+
+    public Map<Integer,Set<String>> balance() {
+        buildGridGraph(gridCells);
+        List<IntSet> parts = computePartitions(Settings.numWorkers,gridCells);
+        return balanceByMETIS( parts, cellGraphIndex);
+    }
+
+    public  Map<Integer,Set<String>> balanceByMETIS(List<IntSet> parts,  Map<GridCell, Integer> cellGraphIndex) {
+        Map<Integer,Set<String>> cellsParts = new HashMap<>();
+
+        ArrayList<int[]> partitions = new ArrayList<>();
+        for( IntSet item: parts){
+            partitions.add(item.toIntArray());
+        }
+
+        for (int groupId = 0; groupId < partitions.size(); groupId++) {
+            Set<String> cells = new HashSet<>();
+            for (int cellIndex : partitions.get(groupId)) {
+
+
+                cells.add(Objects.requireNonNull(GraphGenerator.getKey(cellGraphIndex, cellIndex)).id);
+            }
+            cellsParts.put((groupId+1),cells);
+
+        }
+
+
+        return cellsParts;
 
     }
     

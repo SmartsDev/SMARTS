@@ -94,10 +94,6 @@ public class Edge {
 	 */
 	public boolean isDetectedVehicleForLight = false;
 	/**
-	 * Delay in seconds. This value can be used for calibration.
-	 */
-	public double delay;
-	/**
 	 * Number of lanes for right-turn
 	 */
 	public int numRightLanes;

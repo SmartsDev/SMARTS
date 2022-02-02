@@ -2,9 +2,11 @@ package common;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 
 import processor.server.DataOutputScope;
 import traffic.light.TrafficLightTiming;
+import traffic.routing.RouteLeg;
 import traffic.routing.Routing;
 import traffic.vehicle.EmergencyStrategy;
 
@@ -73,13 +75,14 @@ public class Settings {
 	public static double lonVsLat = 1.26574588;//Longitude-latitude ratio in terms of Euclidean distance per degree. This is re-computed when loading map.
 	public static int numLanesPerEdge = 0;//A positive value means all edges have the same number of lanes. '0' means the number is read from OSM data or set based on edge type.
 	public static String roadGraph = "";//Road graph data in a string. 
-	public static double laneWidthInMeters = 0.6;
+	public static double laneWidthInMeters = 0.6;	
 
 	/*
 	 * Map data
 	 */
 	final public static String delimiterItem = "\u001e";
 	final public static String delimiterSubItem = "\u001f";
+	
 
 	/*
 	 * Traffic generation
@@ -114,7 +117,8 @@ public class Settings {
 	public static EmergencyStrategy emergencyStrategy = EmergencyStrategy.NonEmergencyPullOffToRoadside;//How non-priority vehicle reacts to priority vehicles, e.g., ambulance, police car, etc.
 	public static double congestionSpeedThreshold = 1;//In m/s. The maximum speed of a traffic congestion.
 	public static boolean isDriveOnLeft = true;
-
+	public static boolean isUseAnyLaneToTurn=true;//Whether vehicles can make turn at any lane in a multi-lane road segment
+	
 	/*
 	 * Traffic light
 	 */

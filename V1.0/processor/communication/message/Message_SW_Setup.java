@@ -46,22 +46,27 @@ public class Message_SW_Setup {
 	public String outputTrajectoryScope;
 	public String outputRouteScope;
 	public String outputTravelTimeScope;
-	public boolean isOutputSimulationLog = false;
+	public boolean isOutputSimulationLog;
 	public ArrayList<Serializable_GPS_Rectangle> listRouteSourceWindowForInternalVehicle = new ArrayList<>();
 	public ArrayList<Serializable_GPS_Rectangle> listRouteDestinationWindowForInternalVehicle = new ArrayList<>();
 	public ArrayList<Serializable_GPS_Rectangle> listRouteSourceDestinationWindowForInternalVehicle = new ArrayList<>();
-	public boolean isAllowReroute = false;
-	public boolean isAllowTramRule = true;
+	public boolean isAllowReroute;
+	public boolean isAllowTramRule;
 	public boolean isDriveOnLeft;
 	public String partitionType;
 
+	public boolean isUseAnyLaneToTurn;
+	
 	public Message_SW_Setup() {
 
 	}
 
-	public Message_SW_Setup(final ArrayList<WorkerMeta> workers, final WorkerMeta workerToReceiveMessage,
-			final ArrayList<Edge> edges, final int step, final ArrayList<Node> nodesToAddLight,
-			final ArrayList<Node> nodesToRemoveLight) {
+	public Message_SW_Setup(final ArrayList<WorkerMeta> workers,
+			final WorkerMeta workerToReceiveMessage,
+			final ArrayList<Edge> edges, final int step,
+			final ArrayList<Node> nodesToAddLight,
+			final ArrayList<Node> nodesToRemoveLight,
+			final String compressedRoadGraph) {
 		isNewEnvironment = Settings.isNewEnvironment;
 		numWorkers = Settings.numWorkers;
 		startStep = step;
@@ -84,7 +89,7 @@ public class Message_SW_Setup {
 			if (Settings.isBuiltinRoadGraph) {
 				roadGraph = "builtin";
 			} else {
-				roadGraph = Settings.roadGraph;
+				roadGraph = compressedRoadGraph;
 			}
 		} else {
 			roadGraph = "";
@@ -98,24 +103,26 @@ public class Message_SW_Setup {
 		outputTravelTimeScope = Settings.outputTravelTimeScope.name();
 		isOutputSimulationLog = Settings.isOutputSimulationLog;
 		listRouteSourceWindowForInternalVehicle = getListRouteWindow(Settings.listRouteSourceWindowForInternalVehicle);
-		listRouteDestinationWindowForInternalVehicle = getListRouteWindow(
-				Settings.listRouteDestinationWindowForInternalVehicle);
-		listRouteSourceDestinationWindowForInternalVehicle = getListRouteWindow(
-				Settings.listRouteSourceDestinationWindowForInternalVehicle);
+		listRouteDestinationWindowForInternalVehicle = getListRouteWindow(Settings.listRouteDestinationWindowForInternalVehicle);
+		listRouteSourceDestinationWindowForInternalVehicle = getListRouteWindow(Settings.listRouteSourceDestinationWindowForInternalVehicle);
 		isAllowReroute = Settings.isAllowReroute;
 		isAllowTramRule = Settings.isAllowTramRule;
 		isDriveOnLeft = Settings.isDriveOnLeft;
+		isUseAnyLaneToTurn=Settings.isUseAnyLaneToTurn;
 	}
 
-	ArrayList<SerializableWorkerMetadata> appendMetadataOfWorkers(final ArrayList<WorkerMeta> workers) {
+	ArrayList<SerializableWorkerMetadata> appendMetadataOfWorkers(
+			final ArrayList<WorkerMeta> workers) {
 		final ArrayList<SerializableWorkerMetadata> listSerializableWorkerMetadata = new ArrayList<>();
 		for (final WorkerMeta worker : workers) {
-			listSerializableWorkerMetadata.add(new SerializableWorkerMetadata(worker));
+			listSerializableWorkerMetadata.add(new SerializableWorkerMetadata(
+					worker));
 		}
 		return listSerializableWorkerMetadata;
 	}
 
-	ArrayList<SerializableDouble> getDriverProfilePercentage(final ArrayList<Double> percentages) {
+	ArrayList<SerializableDouble> getDriverProfilePercentage(
+			final ArrayList<Double> percentages) {
 		final ArrayList<SerializableDouble> list = new ArrayList<>();
 		for (final Double percentage : percentages) {
 			list.add(new SerializableDouble(percentage));
@@ -131,10 +138,12 @@ public class Message_SW_Setup {
 		return list;
 	}
 
-	ArrayList<Serializable_GPS_Rectangle> getListRouteWindow(final ArrayList<double[]> windows) {
+	ArrayList<Serializable_GPS_Rectangle> getListRouteWindow(
+			final ArrayList<double[]> windows) {
 		final ArrayList<Serializable_GPS_Rectangle> list = new ArrayList<>();
 		for (final double[] window : windows) {
-			list.add(new Serializable_GPS_Rectangle(window[0], window[1], window[2], window[3]));
+			list.add(new Serializable_GPS_Rectangle(window[0], window[1],
+					window[2], window[3]));
 		}
 		return list;
 	}

@@ -82,8 +82,10 @@ public class RoadNetwork {
 
 		for (final Node node : initialNodesWithLight) {
 			for (final Edge inwardEdgeAtImportedLight : node.inwardEdges) {
-				final ArrayList<Edge> candidateEdges = getEdgesParallelToEdge(inwardEdgeAtImportedLight.startNode.lat,
-						inwardEdgeAtImportedLight.startNode.lon, inwardEdgeAtImportedLight.endNode.lat,
+				final ArrayList<Edge> candidateEdges = getEdgesParallelToEdge(
+						inwardEdgeAtImportedLight.startNode.lat,
+						inwardEdgeAtImportedLight.startNode.lon,
+						inwardEdgeAtImportedLight.endNode.lat,
 						inwardEdgeAtImportedLight.endNode.lon);
 
 				/*
@@ -96,7 +98,8 @@ public class RoadNetwork {
 					if (edge.type != RoadType.tram) {
 						continue;
 					}
-					final double dist = RoadUtil.getDistInMeters(edge.endNode.lat, edge.endNode.lon, node.lat,
+					final double dist = RoadUtil.getDistInMeters(
+							edge.endNode.lat, edge.endNode.lon, node.lat,
 							node.lon);
 					if (dist < minDist) {
 						closestTramEdge = edge;
@@ -163,8 +166,10 @@ public class RoadNetwork {
 		final double lonPerCol = (Math.abs(maxLon - minLon) / Settings.numGridCols) + 0.0000001;
 
 		for (final Node mapNode : nodes) {
-			final int row = (int) Math.floor(Math.abs(mapNode.lat - minLat) / latPerRow);
-			final int col = (int) Math.floor(Math.abs(mapNode.lon - minLon) / lonPerCol);
+			final int row = (int) Math.floor(Math.abs(mapNode.lat - minLat)
+					/ latPerRow);
+			final int col = (int) Math.floor(Math.abs(mapNode.lon - minLon)
+					/ lonPerCol);
 			grid[row][col].nodes.add(mapNode);
 			mapNode.gridCell = grid[row][col];
 		}
@@ -187,7 +192,8 @@ public class RoadNetwork {
 			final Node endNode = edge.endNode;
 			final double destLat = endNode.lat;
 			final double destLon = endNode.lon;
-			edge.length = RoadUtil.getDistInMeters(sourceLat, sourceLon, destLat, destLon);
+			edge.length = RoadUtil.getDistInMeters(sourceLat, sourceLon,
+					destLat, destLon);
 		}
 	}
 
@@ -199,7 +205,8 @@ public class RoadNetwork {
 			for (int j = 0; j < Settings.numGridCols; j++) {
 				for (final Node node : grid[i][j].nodes) {
 					for (final Edge edge : node.outwardEdges) {
-						grid[i][j].laneLength += edge.length * edge.lanes.size();
+						grid[i][j].laneLength += edge.length
+								* edge.lanes.size();
 					}
 				}
 			}
@@ -225,7 +232,8 @@ public class RoadNetwork {
 	 * @param searchStartNode
 	 * @return
 	 */
-	public Edge findNextEdgeOnRoad(final Edge currentEdge, final boolean searchStartNode) {
+	public Edge findNextEdgeOnRoad(final Edge currentEdge,
+			final boolean searchStartNode) {
 		ArrayList<Edge> edgesToSearch = null;
 		if (searchStartNode) {
 			edgesToSearch = currentEdge.startNode.inwardEdges;
@@ -234,7 +242,8 @@ public class RoadNetwork {
 		}
 		for (final Edge edge : edgesToSearch) {
 			if (edge.name.equals(currentEdge.name)) {
-				if ((edge.startNode != currentEdge.endNode) || (edge.endNode != currentEdge.startNode)) {
+				if ((edge.startNode != currentEdge.endNode)
+						|| (edge.endNode != currentEdge.startNode)) {
 					return edge;
 				}
 			}
@@ -246,8 +255,10 @@ public class RoadNetwork {
 	 * Get the index of the nearest edge to a given point.
 	 */
 	public Edge getEdgeAtPoint(final double lat, final double lon) {
-		final double latPerRow = Math.abs(maxLat - minLat) / Settings.numGridRows;
-		final double lonPerCol = Math.abs(maxLon - minLon) / Settings.numGridCols;
+		final double latPerRow = Math.abs(maxLat - minLat)
+				/ Settings.numGridRows;
+		final double lonPerCol = Math.abs(maxLon - minLon)
+				/ Settings.numGridCols;
 		final int row = (int) Math.floor(Math.abs(lat - minLat) / latPerRow);
 		final int col = (int) Math.floor(Math.abs(lon - minLon) / lonPerCol);
 		double minDistToEdge = 100000;
@@ -267,21 +278,28 @@ public class RoadNetwork {
 						 * Skip edges whose bounding rectangle does not contain
 						 * the point.
 						 */
-						if ((edge.startNode.lat < lat) && (edge.endNode.lat < lat)) {
+						if ((edge.startNode.lat < lat)
+								&& (edge.endNode.lat < lat)) {
 							continue;
 						}
-						if ((edge.startNode.lon < lon) && (edge.endNode.lon < lon)) {
+						if ((edge.startNode.lon < lon)
+								&& (edge.endNode.lon < lon)) {
 							continue;
 						}
-						if ((edge.startNode.lat > lat) && (edge.endNode.lat > lat)) {
+						if ((edge.startNode.lat > lat)
+								&& (edge.endNode.lat > lat)) {
 							continue;
 						}
-						if ((edge.startNode.lon > lon) && (edge.endNode.lon > lon)) {
+						if ((edge.startNode.lon > lon)
+								&& (edge.endNode.lon > lon)) {
 							continue;
 						}
 
-						distToEdge = Line2D.ptLineDist(edge.startNode.lon, edge.startNode.lat * Settings.lonVsLat,
-								edge.endNode.lon, edge.endNode.lat * Settings.lonVsLat, lon, lat * Settings.lonVsLat);
+						distToEdge = Line2D.ptLineDist(edge.startNode.lon,
+								edge.startNode.lat * Settings.lonVsLat,
+								edge.endNode.lon, edge.endNode.lat
+										* Settings.lonVsLat, lon, lat
+										* Settings.lonVsLat);
 						if (distToEdge < minDistToEdge) {
 							edgeFound = edge;
 							minDistToEdge = distToEdge;
@@ -298,18 +316,28 @@ public class RoadNetwork {
 		}
 	}
 
-	public HashSet<Edge> getEdgesOnGivenRoadAtGivenAngle(final String roadName, final double inputStartLat,
-			final double inputStartLon, final double inputEndLat, final double inputEndLon) {
-		final double latPerRow = Math.abs(maxLat - minLat) / Settings.numGridRows;
-		final double lonPerCol = Math.abs(maxLon - minLon) / Settings.numGridCols;
-		final int row = (int) Math.floor(Math.abs(inputStartLat - minLat) / latPerRow);
-		final int col = (int) Math.floor(Math.abs(inputStartLon - minLon) / lonPerCol);
-		final double maxLat = inputStartLat > inputEndLat ? inputStartLat : inputEndLat;
-		final double maxLon = inputStartLon > inputEndLon ? inputStartLon : inputEndLon;
-		final double minLat = inputStartLat < inputEndLat ? inputStartLat : inputEndLat;
-		final double minLon = inputStartLon < inputEndLon ? inputStartLon : inputEndLon;
+	public HashSet<Edge> getEdgesOnGivenRoadAtGivenAngle(final String roadName,
+			final double inputStartLat, final double inputStartLon,
+			final double inputEndLat, final double inputEndLon) {
+		final double latPerRow = Math.abs(maxLat - minLat)
+				/ Settings.numGridRows;
+		final double lonPerCol = Math.abs(maxLon - minLon)
+				/ Settings.numGridCols;
+		final int row = (int) Math.floor(Math.abs(inputStartLat - minLat)
+				/ latPerRow);
+		final int col = (int) Math.floor(Math.abs(inputStartLon - minLon)
+				/ lonPerCol);
+		final double maxLat = inputStartLat > inputEndLat ? inputStartLat
+				: inputEndLat;
+		final double maxLon = inputStartLon > inputEndLon ? inputStartLon
+				: inputEndLon;
+		final double minLat = inputStartLat < inputEndLat ? inputStartLat
+				: inputEndLat;
+		final double minLon = inputStartLon < inputEndLon ? inputStartLon
+				: inputEndLon;
 		final double angleRangeInRadians = Math.PI / 2.0;
-		final double angleInput = Math.atan2(inputEndLat - inputStartLat, inputEndLon - inputStartLon);
+		final double angleInput = Math.atan2(inputEndLat - inputStartLat,
+				inputEndLon - inputStartLon);
 		final HashSet<Edge> edgesFound = new HashSet<>();
 		for (int i = row - 1; i <= (row + 1); i++) {
 			if ((i < 0) || (i >= Settings.numGridRows)) {
@@ -320,14 +348,17 @@ public class RoadNetwork {
 					continue;
 				}
 				for (final Node node : grid[i][j].nodes) {
-					if ((node.lat < minLat) || (node.lat > maxLat) || (node.lon < minLon) || (node.lon > maxLon)) {
+					if ((node.lat < minLat) || (node.lat > maxLat)
+							|| (node.lon < minLon) || (node.lon > maxLon)) {
 						continue;
 					}
 					for (final Edge edge : node.outwardEdges) {
 						// Edge's name must match the given name
 						if (edge.name.equals(roadName)) {
-							// Edge's angle should be similar to that of the given segment
-							final double angleEdge = Math.atan2(edge.endNode.lat - edge.startNode.lat,
+							// Edge's angle should be similar to that of the
+							// given segment
+							final double angleEdge = Math.atan2(
+									edge.endNode.lat - edge.startNode.lat,
 									edge.endNode.lon - edge.startNode.lon);
 							if (Math.abs(angleInput - angleEdge) > angleRangeInRadians) {
 								continue;
@@ -341,26 +372,52 @@ public class RoadNetwork {
 		return edgesFound;
 	}
 
+	public double getShortestGpsDistBtwTwoEdges(Line2D seg1, Line2D seg2) {
+		if(seg1.intersectsLine(seg2)){
+			return 0;
+		}
+		double shortestDist = Double.MAX_VALUE;
+		double[] ptSegDists = new double[4];
+		ptSegDists[0] = seg1.ptSegDist(seg2.getX1(), seg2.getY1());
+		ptSegDists[1] = seg1.ptSegDist(seg2.getX2(), seg2.getY2());
+		ptSegDists[2] = seg2.ptSegDist(seg1.getX1(), seg1.getY1());
+		ptSegDists[3] = seg2.ptSegDist(seg1.getX2(), seg1.getY2());
+		for (int i = 0; i < ptSegDists.length; i++) {
+			if (ptSegDists[i] < shortestDist) {
+				shortestDist = ptSegDists[i];
+			}
+		}
+		return shortestDist;
+	}
+
 	/**
 	 * Get the edges aligned with a directional line
 	 */
-	public ArrayList<Edge> getEdgesParallelToEdge(final double inputStartLat, final double inputStartLon,
-			final double inputEndLat, final double inputEndLon) {
+	public ArrayList<Edge> getEdgesParallelToEdge(final double inputStartLat,
+			final double inputStartLon, final double inputEndLat,
+			final double inputEndLon) {
 
-		final double latPerRow = Math.abs(maxLat - minLat) / Settings.numGridRows;
-		final double lonPerCol = Math.abs(maxLon - minLon) / Settings.numGridCols;
-		final int row = (int) Math.floor(Math.abs(inputStartLat - minLat) / latPerRow);
-		final int col = (int) Math.floor(Math.abs(inputStartLon - minLon) / lonPerCol);
+		final double latPerRow = Math.abs(maxLat - minLat)
+				/ Settings.numGridRows;
+		final double lonPerCol = Math.abs(maxLon - minLon)
+				/ Settings.numGridCols;
+		final int row = (int) Math.floor(Math.abs(inputStartLat - minLat)
+				/ latPerRow);
+		final int col = (int) Math.floor(Math.abs(inputStartLon - minLon)
+				/ lonPerCol);
 
 		final double scanRangeInMeters = 10;
 		final double angleRangeInRadians = 0.1;
-		final double angleInput = Math.atan2(inputEndLat - inputStartLat, inputEndLon - inputStartLon);
+		final double angleInput = Math.atan2(inputEndLat - inputStartLat,
+				inputEndLon - inputStartLon);
 
-		final double distInputStartEndInMeters = RoadUtil.getDistInMeters(inputStartLat, inputStartLon, inputEndLat,
-				inputEndLon);
-		final double distInputStartEndInGps = Point2D.distance(inputStartLon, inputStartLat * Settings.lonVsLat,
-				inputEndLon, inputEndLat * Settings.lonVsLat);
-		final double distInputMeterToGpsRatio = distInputStartEndInMeters / distInputStartEndInGps;
+		final double distInputStartEndInMeters = RoadUtil.getDistInMeters(
+				inputStartLat, inputStartLon, inputEndLat, inputEndLon);
+		final double distInputStartEndInGps = Point2D.distance(inputStartLon,
+				inputStartLat * Settings.lonVsLat, inputEndLon, inputEndLat
+						* Settings.lonVsLat);
+		final double distInputMeterToGpsRatio = distInputStartEndInMeters
+				/ distInputStartEndInGps;
 
 		final ArrayList<Edge> edgesFound = new ArrayList<>();
 
@@ -374,20 +431,23 @@ public class RoadNetwork {
 				}
 				for (final Node node : grid[i][j].nodes) {
 					for (final Edge edge : node.outwardEdges) {
-						// Edge's start or end must be close to the input segment
-						final double distEdgeStartToInputSegmentInMeters = Line2D.ptSegDist(inputStartLon,
-								inputStartLat * Settings.lonVsLat, inputEndLon, inputEndLat * Settings.lonVsLat,
-								edge.startNode.lon, edge.startNode.lat * Settings.lonVsLat) * distInputMeterToGpsRatio;
-						final double distEdgeEndToInputSegmentInMeters = Line2D.ptSegDist(inputStartLon,
-								inputStartLat * Settings.lonVsLat, inputEndLon, inputEndLat * Settings.lonVsLat,
-								edge.endNode.lon, edge.endNode.lat * Settings.lonVsLat) * distInputMeterToGpsRatio;
-						if ((distEdgeStartToInputSegmentInMeters > scanRangeInMeters)
-								&& (distEdgeEndToInputSegmentInMeters > scanRangeInMeters)) {
+						Line2D seg1 = new Line2D.Double(inputStartLon,
+								inputStartLat * Settings.lonVsLat, inputEndLon,
+								inputEndLat * Settings.lonVsLat);
+						Line2D seg2 = new Line2D.Double(edge.startNode.lon,
+								edge.startNode.lat * Settings.lonVsLat,
+								edge.endNode.lon, edge.endNode.lat
+										* Settings.lonVsLat);
+						double shortestDistInMetres = getShortestGpsDistBtwTwoEdges(
+								seg1, seg2) * distInputMeterToGpsRatio;
+
+						if (shortestDistInMetres > scanRangeInMeters) {
 							continue;
 						}
-						// Tow edges' angles must be similar
-						final double angleEdge = Math.atan2(edge.endNode.lat - edge.startNode.lat,
-								edge.endNode.lon - edge.startNode.lon);
+						// Two edges' angles must be similar
+						final double angleEdge = Math.atan2(edge.endNode.lat
+								- edge.startNode.lat, edge.endNode.lon
+								- edge.startNode.lon);
 						if (Math.abs(angleInput - angleEdge) > angleRangeInRadians) {
 							continue;
 						}
@@ -403,10 +463,13 @@ public class RoadNetwork {
 	/**
 	 * Get street names near a given point.
 	 */
-	public HashSet<String> getStreetNamesNearPoint(final double lat, final double lon) {
+	public HashSet<String> getStreetNamesNearPoint(final double lat,
+			final double lon) {
 		final HashSet<String> names = new HashSet<>();
-		final double latPerRow = Math.abs(maxLat - minLat) / Settings.numGridRows;
-		final double lonPerCol = Math.abs(maxLon - minLon) / Settings.numGridCols;
+		final double latPerRow = Math.abs(maxLat - minLat)
+				/ Settings.numGridRows;
+		final double lonPerCol = Math.abs(maxLon - minLon)
+				/ Settings.numGridCols;
 		final int row = (int) Math.floor(Math.abs(lat - minLat) / latPerRow);
 		final int col = (int) Math.floor(Math.abs(lon - minLon) / lonPerCol);
 		final double scanRange = 30;
@@ -424,23 +487,30 @@ public class RoadNetwork {
 						 * Skip edges whose bounding rectangle does not contain
 						 * the point.
 						 */
-						if ((edge.startNode.lat < lat) && (edge.endNode.lat < lat)) {
+						if ((edge.startNode.lat < lat)
+								&& (edge.endNode.lat < lat)) {
 							continue;
 						}
-						if ((edge.startNode.lon < lon) && (edge.endNode.lon < lon)) {
+						if ((edge.startNode.lon < lon)
+								&& (edge.endNode.lon < lon)) {
 							continue;
 						}
-						if ((edge.startNode.lat > lat) && (edge.endNode.lat > lat)) {
+						if ((edge.startNode.lat > lat)
+								&& (edge.endNode.lat > lat)) {
 							continue;
 						}
-						if ((edge.startNode.lon > lon) && (edge.endNode.lon > lon)) {
+						if ((edge.startNode.lon > lon)
+								&& (edge.endNode.lon > lon)) {
 							continue;
 						}
 
-						final double distToEdge = Line2D.ptLineDist(edge.startNode.lon,
-								edge.startNode.lat * Settings.lonVsLat, edge.endNode.lon,
-								edge.endNode.lat * Settings.lonVsLat, lon, lat * Settings.lonVsLat);
-						if ((distToEdge < scanRange) && (edge.name.length() > 0)) {
+						final double distToEdge = Line2D.ptLineDist(
+								edge.startNode.lon, edge.startNode.lat
+										* Settings.lonVsLat, edge.endNode.lon,
+								edge.endNode.lat * Settings.lonVsLat, lon, lat
+										* Settings.lonVsLat);
+						if ((distToEdge < scanRange)
+								&& (edge.name.length() > 0)) {
 							names.add(edge.name);
 						}
 					}
@@ -483,7 +553,7 @@ public class RoadNetwork {
 
 			int position = 0;
 
-			// Basic information of the node			
+			// Basic information of the node
 			int nodeIndex = Integer.parseInt(fields[++position]);
 			long osmId = Long.parseLong(fields[++position]);
 			final String nameNode = fields[++position];
@@ -492,13 +562,14 @@ public class RoadNetwork {
 			boolean hasTrafficSignal = Boolean.parseBoolean(fields[++position]);
 			boolean tram_stop = Boolean.parseBoolean(fields[++position]);
 			boolean bus_stop = Boolean.parseBoolean(fields[++position]);
-			final Node node = new Node(osmId, nameNode, lat, lon, hasTrafficSignal, tram_stop, bus_stop);
+			final Node node = new Node(osmId, nameNode, lat, lon,
+					hasTrafficSignal, tram_stop, bus_stop);
 			nodes.add(node);
 			// Information of outward edges
 			int numEdges = Integer.parseInt(fields[++position]);
 			for (int j = 0; j < numEdges; j++) {
 				int startNodeIndex = nodeIndex;
-				position++;//Skip <Edge> tag
+				position++;// Skip <Edge> tag
 				int endNodeIndex = Integer.parseInt(fields[++position]);
 				int numLanes = Integer.parseInt(fields[++position]);
 				int numRightLanes = Integer.parseInt(fields[++position]);
@@ -507,18 +578,32 @@ public class RoadNetwork {
 				int numLeftOnlyLanes = Integer.parseInt(fields[++position]);
 				final String type = fields[++position];
 				final String nameEdge = fields[++position];
-				double maxspeed = Double.parseDouble(fields[++position]) / 3.6;// speed needs to be converted from km/h to m/s
+				double maxspeed = Double.parseDouble(fields[++position]) / 3.6;// speed
+																				// needs
+																				// to
+																				// be
+																				// converted
+																				// from
+																				// km/h
+																				// to
+																				// m/s
 				boolean roundabout = Boolean.parseBoolean(fields[++position]);
-				final ArrayList<String> tramRoutesRef = new ArrayList<>(Arrays.asList(fields[++position].split("-")));
-				if ((tramRoutesRef.size() > 0) && (tramRoutesRef.get(0).length() == 0)) {
+				final ArrayList<String> tramRoutesRef = new ArrayList<>(
+						Arrays.asList(fields[++position].split("-")));
+				if ((tramRoutesRef.size() > 0)
+						&& (tramRoutesRef.get(0).length() == 0)) {
 					tramRoutesRef.clear();
 				}
-				final ArrayList<String> busRoutesRef = new ArrayList<>(Arrays.asList(fields[++position].split("-")));
-				if ((busRoutesRef.size() > 0) && (busRoutesRef.get(0).length() == 0)) {
+				final ArrayList<String> busRoutesRef = new ArrayList<>(
+						Arrays.asList(fields[++position].split("-")));
+				if ((busRoutesRef.size() > 0)
+						&& (busRoutesRef.get(0).length() == 0)) {
 					busRoutesRef.clear();
 				}
-				final Edge edge = new Edge(startNodeIndex, endNodeIndex, type, nameEdge, maxspeed, roundabout,
-						tramRoutesRef, busRoutesRef, numRightLanes, numLeftLanes, numRightOnlyLanes, numLeftOnlyLanes);
+				final Edge edge = new Edge(startNodeIndex, endNodeIndex, type,
+						nameEdge, maxspeed, roundabout, tramRoutesRef,
+						busRoutesRef, numRightLanes, numLeftLanes,
+						numRightOnlyLanes, numLeftOnlyLanes);
 				edges.add(edge);
 				createLanes(edge, numLanes);
 				node.outwardEdges.add(edge);
@@ -554,8 +639,8 @@ public class RoadNetwork {
 			final Node endNode = nodes.get(e.importedEndNodeIndex);
 			e.startNode = startNode;
 			e.endNode = endNode;
-			e.angleOutward = Math.atan2((e.startNode.lat - e.endNode.lat) * Settings.lonVsLat,
-					e.startNode.lon - e.endNode.lon);
+			e.angleOutward = Math.atan2((e.startNode.lat - e.endNode.lat)
+					* Settings.lonVsLat, e.startNode.lon - e.endNode.lon);
 			if (e.angleOutward < 0) {
 				e.angleInward = e.angleOutward + Math.PI;
 			} else {
@@ -607,9 +692,11 @@ public class RoadNetwork {
 
 	}
 
-	public boolean isNodeInsideRectangle(final Node node, final ArrayList<double[]> listRect) {
+	public boolean isNodeInsideRectangle(final Node node,
+			final ArrayList<double[]> listRect) {
 		for (final double[] rect : listRect) {
-			if ((node.lon >= rect[0]) && (node.lon <= rect[2]) && (node.lat >= rect[3]) && (node.lat <= rect[1])) {
+			if ((node.lon >= rect[0]) && (node.lon <= rect[2])
+					&& (node.lat >= rect[3]) && (node.lat <= rect[1])) {
 				return true;
 			}
 		}

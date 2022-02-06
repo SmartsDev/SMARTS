@@ -126,4 +126,9 @@ public class Settings {
 	public static double trafficLightDetectionDistance = 30;//In meters. How far a vehicle can see a light.
 	public static double maxLightGroupRadius = 60;//In meters. Controls size of the area where a cluster of lights can be identified.
 
+	/*
+	* Partitioning type [GridGraph, Space-grid]
+	 */
+
+	public static String partitionType = "Space-grid";
 }

@@ -1,9 +1,10 @@
 package processor.server;
 
-import java.util.ArrayList;
-import java.util.Random;
+import java.util.*;
 
 import common.Settings;
+import it.unimi.dsi.fastutil.ints.IntSet;
+import processor.server.graph_partition.GraphGenerator;
 import traffic.road.GridCell;
 import traffic.road.RoadNetwork;
 
@@ -111,21 +112,65 @@ public class WorkloadBalancer {
 	 */
 	public static void partitionGridCells(final ArrayList<WorkerMeta> workers, final RoadNetwork roadNetwork) {
 
-		// Clear existing grid cells in the work area of each worker
+
+		final GridCell[][] grid = roadNetwork.grid;
+
+
+		if(Settings.partitionType.equals("GridGraph") && Settings.numWorkers>1) {
+
+			GraphGenerator graph = new GraphGenerator(grid);
+			Map<Integer,Set<String>> partCellsIds = graph.balance();
+			assignPartitionsToWorkers(partCellsIds,workers,grid, roadNetwork.laneLengthWholeMap);
+		}
+		else
+			balanceByLaneLength(grid,workers,roadNetwork);
+
+		System.out.println(Settings.partitionType + " Partitioning type");
+		for (final WorkerMeta worker : workers) {
+			System.out.println("Worker " + worker.name + "'s area has " + worker.workarea.workCells.size() + " cells.");
+		}
+
+
+	}
+
+	private static void assignPartitionsToWorkers(Map<Integer, Set<String>> partCellsIds, ArrayList<WorkerMeta> workers,GridCell[][] grid, double laneLengthWholeMap ) {
+
+		Map<Integer,Set<GridCell>> partitions = new HashMap<>();
+		for(Integer part: partCellsIds.keySet()){
+			Set<GridCell> cells = new HashSet<>();
+			for(String cid:partCellsIds.get(part)){
+				String[] id = cid.split("T");
+				int i = Integer.parseInt(id[0]);
+				int j = Integer.parseInt(id[1]);
+				cells.add(grid[i][j]);
+
+			}
+			partitions.put(part,cells);
+		}
+
+
+		int index = 0;
+		int totalLaneLengthInCurrentWorkarea;
+		for (final WorkerMeta worker : workers) {
+			index++;
+			worker.workarea.workCells.clear();
+			worker.workarea.workCells.addAll(partitions.get(index));
+			totalLaneLengthInCurrentWorkarea  = 0;
+			for (GridCell c: worker.workarea.workCells){
+				totalLaneLengthInCurrentWorkarea = totalLaneLengthInCurrentWorkarea + c.laneLength;
+			}
+			worker.laneLengthRatioAgainstWholeMap = totalLaneLengthInCurrentWorkarea/laneLengthWholeMap;
+
+		}
+
+	}
+
+	private static void balanceByLaneLength(GridCell[][] grid, ArrayList<WorkerMeta> workers, RoadNetwork roadNetwork) {
 		for (final WorkerMeta worker : workers) {
 			worker.workarea.workCells.clear();
 		}
 
-		final GridCell[][] grid = roadNetwork.grid;
-
-		double laneLengthWholeMap = 0;
-		for (int i = 0; i < Settings.numGridRows; i++) {
-			for (int j = 0; j < Settings.numGridCols; j++) {
-				laneLengthWholeMap += grid[i][j].laneLength;
-			}
-		}
-
-		final double optimalLaneLengthPerWorker = laneLengthWholeMap / Settings.numWorkers;
+		final double optimalLaneLengthPerWorker = roadNetwork.laneLengthWholeMap / Settings.numWorkers;
 
 		int totalLaneLengthInCurrentWorkarea = 0;
 		int workerIndex = 0;
@@ -141,7 +186,7 @@ public class WorkloadBalancer {
 						workers.get(workerIndex).workarea.workCells.add(grid[row][col]);
 						// Update lane length ratio (roads in current worker vs. whole map)
 						workers.get(workerIndex).laneLengthRatioAgainstWholeMap = totalLaneLengthInCurrentWorkarea
-								/ laneLengthWholeMap;
+								/ roadNetwork.laneLengthWholeMap;
 						workerIndex++;
 						totalLaneLengthInCurrentWorkarea = 0;
 					} else {
@@ -156,16 +201,10 @@ public class WorkloadBalancer {
 					workers.get(workerIndex).workarea.workCells.add(grid[row][col]);
 					// Update lane length ratio (roads in current worker vs. whole map)
 					workers.get(workerIndex).laneLengthRatioAgainstWholeMap = totalLaneLengthInCurrentWorkarea
-							/ laneLengthWholeMap;
+							/ roadNetwork.laneLengthWholeMap;
 				}
 
 			}
 		}
-
-		for (final WorkerMeta worker : workers) {
-			System.out.println("Worker " + worker.name + "'s area has " + worker.workarea.workCells.size() + " cells.");
-		}
-
 	}
-
 }

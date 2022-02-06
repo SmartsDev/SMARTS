@@ -6,16 +6,12 @@ import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
+import javax.swing.*;
 
 import common.Settings;
 import processor.Simulator;
 import processor.server.Server;
-import javax.swing.GroupLayout;
+
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.LayoutStyle.ComponentPlacement;
 
@@ -25,6 +21,9 @@ public class ControlPanel_Resource extends JPanel {
 	private final JTextField textField_numWorkerRequired;
 	final JLabel lblConnectedWorkers;
 	private JTextField textField_numConnectedWorkers;
+
+	private JRadioButton rdbtnSpacePart;
+	private JRadioButton rdbtnGridGraphPart;
 
 	public ControlPanel_Resource(final Server server, final ControlPanel parentPanel) {
 		setPreferredSize(new Dimension(450, 97));
@@ -36,6 +35,7 @@ public class ControlPanel_Resource extends JPanel {
 					GuiUtil.setEnabledStatusOfComponents(parentPanel.cpMiscConfig, false);
 					server.killConnectedWorkers();
 					updateNumConnectedWorkers(0);
+//					Settings.partitionType = .getText();
 					Settings.numWorkers = Integer.parseInt(textField_numWorkerRequired.getText());
 					if (Settings.isSharedJVM) {
 						Simulator.createWorkers();
@@ -63,6 +63,30 @@ public class ControlPanel_Resource extends JPanel {
 		textField_numConnectedWorkers.setEditable(false);
 		textField_numConnectedWorkers.setColumns(10);
 		btnApply.setFont(new Font("Tahoma", Font.PLAIN, 13));
+
+		rdbtnSpacePart = new JRadioButton("Space-grid Partitioning ");
+		rdbtnSpacePart.setSelected(true);
+		rdbtnSpacePart.addActionListener(new ActionListener() {
+			public void actionPerformed(final ActionEvent e) {
+				if (rdbtnSpacePart.isSelected()) {
+					Settings.partitionType = "Space-grid";
+					rdbtnGridGraphPart.setSelected(false);
+				} else {
+					rdbtnSpacePart.setSelected(true);
+				}
+			}
+		});
+		rdbtnGridGraphPart = new JRadioButton("GridGraph Partitioning");
+		rdbtnGridGraphPart.addActionListener(new ActionListener() {
+			public void actionPerformed(final ActionEvent e) {
+				if (rdbtnGridGraphPart.isSelected()) {
+					Settings.partitionType = "GridGraph";
+					rdbtnSpacePart.setSelected(false);
+				} else {
+					rdbtnGridGraphPart.setSelected(true);
+				}
+			}
+		});
 		GroupLayout groupLayout = new GroupLayout(this);
 		groupLayout.setHorizontalGroup(
 			groupLayout.createParallelGroup(Alignment.TRAILING)
@@ -78,7 +102,13 @@ public class ControlPanel_Resource extends JPanel {
 						.addGroup(groupLayout.createSequentialGroup()
 							.addComponent(lblConnectedWorkers)
 							.addPreferredGap(ComponentPlacement.UNRELATED)
-							.addComponent(textField_numConnectedWorkers, GroupLayout.PREFERRED_SIZE, 64, GroupLayout.PREFERRED_SIZE)))
+							.addComponent(textField_numConnectedWorkers, GroupLayout.PREFERRED_SIZE, 64, GroupLayout.PREFERRED_SIZE))
+						.addGroup(groupLayout.createSequentialGroup()
+								.addComponent(rdbtnSpacePart, GroupLayout.DEFAULT_SIZE, 144, Short.MAX_VALUE)
+								.addPreferredGap(ComponentPlacement.RELATED)
+								.addComponent(rdbtnGridGraphPart, GroupLayout.PREFERRED_SIZE, 190, GroupLayout.PREFERRED_SIZE)
+								)).addGap(90)
+
 					.addContainerGap(81, Short.MAX_VALUE))
 		);
 		groupLayout.setVerticalGroup(
@@ -93,7 +123,13 @@ public class ControlPanel_Resource extends JPanel {
 					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
 						.addComponent(lblConnectedWorkers, GroupLayout.PREFERRED_SIZE, 22, GroupLayout.PREFERRED_SIZE)
 						.addComponent(textField_numConnectedWorkers, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-					.addGap(56))
+						.addPreferredGap(ComponentPlacement.RELATED)
+					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+							.addComponent(rdbtnSpacePart)
+							.addComponent(rdbtnGridGraphPart))
+						.addGap(90)
+					)
+
 		);
 		setLayout(groupLayout);
 	}

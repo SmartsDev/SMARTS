@@ -53,6 +53,8 @@ public class Message_SW_Setup {
 	public boolean isAllowReroute;
 	public boolean isAllowTramRule;
 	public boolean isDriveOnLeft;
+	public String partitionType;
+
 	public boolean isUseAnyLaneToTurn;
 	
 	public Message_SW_Setup() {
@@ -69,6 +71,7 @@ public class Message_SW_Setup {
 		numWorkers = Settings.numWorkers;
 		startStep = step;
 		maxNumSteps = Settings.maxNumSteps;
+		partitionType = Settings.partitionType;
 		numStepsPerSecond = Settings.numStepsPerSecond;
 		workerToServerReportStepGapInServerlessMode = Settings.trafficReportStepGapInServerlessMode;
 		periodOfTrafficWaitForTramAtStop = Settings.periodOfTrafficWaitForTramAtStop;

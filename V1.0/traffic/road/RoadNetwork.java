@@ -56,6 +56,7 @@ public class RoadNetwork {
 
 	public double gridCellHeight;
 	public double gridCellWidth;
+	public double laneLengthWholeMap;
 
 	public RoadNetwork() {
 		importNodesEdges();
@@ -154,6 +155,8 @@ public class RoadNetwork {
 				grid[i][j] = new GridCell();
 				grid[i][j].row = i;
 				grid[i][j].col = j;
+				grid[i][j].id = i+"T"+j;
+
 			}
 		}
 
@@ -176,6 +179,11 @@ public class RoadNetwork {
 		 * Calculate the lane length in every grid cell.
 		 */
 		computeTotalOutwardLaneLength(grid);
+		for (int i = 0; i < Settings.numGridRows; i++) {
+			for (int j = 0; j < Settings.numGridCols; j++) {
+				laneLengthWholeMap += grid[i][j].laneLength;
+			}
+		}
 	}
 
 	/**

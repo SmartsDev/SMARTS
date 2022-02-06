@@ -1,0 +1,8 @@
+numRuns 1
+maxNumSteps 3000
+numRandomBackgroundPrivateVehicles 10000
+outputSimulationLog true
+lookAheadDistance 100
+numStepsPerSecond 5
+driveOnLeft true
+###

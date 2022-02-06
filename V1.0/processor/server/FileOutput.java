@@ -105,7 +105,7 @@ public class FileOutput {
 			// Print column titles
 			fosLog = new FileOutputStream(file, true);
 			outputStringToFile(fosLog,
-					"Time Stamp, Real Time (s), Simulation Time (s), # of Worker-Worker Connections, Average Travel Speed (km/h)"
+					"Time Stamp, Real Time (s), Simulation Time (s), # of Worker-Worker Connections, Partitioning Type, Average Travel Speed (km/h)"
 							+ System.getProperty("line.separator"));
 		} catch (final Exception e) {
 			e.printStackTrace();
@@ -222,6 +222,8 @@ public class FileOutput {
 			outputStringToFile(fosLog, String.valueOf(simulationTimeCounter));
 			outputStringToFile(fosLog, ",");
 			outputStringToFile(fosLog, String.valueOf(totalNumFellowsOfWorker));
+			outputStringToFile(fosLog, ",");
+			outputStringToFile(fosLog, String.valueOf(Settings.partitionType));
 			outputStringToFile(fosLog, ",");
 			outputStringToFile(fosLog, String.valueOf(aggregatedSpeedValue / vehicleCount * 3.6));
 			outputStringToFile(fosLog, System.getProperty("line.separator"));

@@ -179,6 +179,7 @@ public class RoadNetwork {
 		 * Calculate the lane length in every grid cell.
 		 */
 		computeTotalOutwardLaneLength(grid);
+		laneLengthWholeMap  = 0;
 		for (int i = 0; i < Settings.numGridRows; i++) {
 			for (int j = 0; j < Settings.numGridCols; j++) {
 				laneLengthWholeMap += grid[i][j].laneLength;

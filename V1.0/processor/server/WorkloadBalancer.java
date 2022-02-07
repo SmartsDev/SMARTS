@@ -125,6 +125,7 @@ public class WorkloadBalancer {
 		else
 			balanceByLaneLength(grid,workers,roadNetwork);
 
+		System.out.println("The map size is: " + grid.length * grid[0].length + " cells.");
 		System.out.println(Settings.partitionType + " Partitioning type");
 		for (final WorkerMeta worker : workers) {
 			System.out.println("Worker " + worker.name + "'s area has " + worker.workarea.workCells.size() + " cells.");

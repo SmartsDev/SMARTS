@@ -109,3 +109,4 @@ SMARTS.iml
 target/*
 *.lst
 /.idea
+dependency-reduced-pom.xml

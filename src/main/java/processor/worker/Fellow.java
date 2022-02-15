@@ -2,7 +2,6 @@ package processor.worker;
 
 import java.util.ArrayList;
 
-import processor.communication.MessageSender;
 import traffic.road.Edge;
 import traffic.road.GridCell;
 import traffic.road.Node;
@@ -16,7 +15,6 @@ import traffic.vehicle.Vehicle;
 public class Fellow {
 	String name;
 
-	MessageSender senderForFellow;
 
 	Workarea workarea;
 	public FellowState state;
@@ -32,6 +30,14 @@ public class Fellow {
 		this.address = address;
 		this.port = port;
 		workarea = new Workarea(name, cellsInWorkarea);
+	}
+
+	public String getAddress() {
+		return address;
+	}
+
+	public int getPort() {
+		return port;
 	}
 
 	/**
@@ -75,12 +81,8 @@ public class Fellow {
 	}
 
 	public void prepareCommunication() {
-		senderForFellow = new MessageSender(address, port);
 		vehiclesToCreateAtBorder.clear();
 	}
 
-	void send(final Object message) {
-		senderForFellow.send(message);
-	}
 
 }

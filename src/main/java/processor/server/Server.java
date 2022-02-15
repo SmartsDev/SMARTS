@@ -1,17 +1,10 @@
 package processor.server;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Scanner;
-import java.util.TreeMap;
-import java.util.UUID;
+import java.util.*;
 
 import common.Settings;
 import common.SysUtil;
 import osm.OSM;
-import processor.communication.IncomingConnectionBuilder;
 import processor.communication.MessageHandler;
 import processor.communication.message.Message_SW_BlockLane;
 import processor.communication.message.Message_SW_ChangeSpeed;
@@ -33,6 +26,7 @@ import processor.communication.message.Message_WS_SetupCreatingVehicles;
 import processor.communication.message.Message_WS_SetupDone;
 import processor.communication.message.Serializable_GPS_Rectangle;
 import processor.communication.message.Serializable_GUI_Vehicle;
+import processor.communication.zmq.ZMQClient;
 import processor.server.gui.GUI;
 import traffic.road.Node;
 import traffic.road.RoadNetwork;
@@ -47,6 +41,9 @@ import traffic.road.RoadUtil;
  * This class can be run as Java application.
  */
 public class Server implements MessageHandler, Runnable {
+
+	private ZMQClient communicationClient;
+
 	public RoadNetwork roadNetwork;
 	ArrayList<WorkerMeta> workerMetas = new ArrayList<>();
 	int step = 0;// Time step in the current simulation
@@ -132,7 +129,7 @@ public class Server implements MessageHandler, Runnable {
 		} else {
 			final Message_SW_KillWorker msd = new Message_SW_KillWorker(
 					Settings.isSharedJVM);
-			worker.send(msd);
+			communicationClient.sendTo(msd,received.workerName);
 		}
 	}
 
@@ -144,8 +141,8 @@ public class Server implements MessageHandler, Runnable {
 		final Message_SW_Serverless_Start message = new Message_SW_Serverless_Start(
 				step);
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(message);
 			worker.setState(WorkerState.SERVERLESS_WORKING);
+			communicationClient.sendTo(message,worker.name);
 		}
 	}
 
@@ -166,7 +163,7 @@ public class Server implements MessageHandler, Runnable {
 			worker.setState(WorkerState.SHARING_STARTED);
 		}
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(new Message_SW_ServerBased_ShareTraffic(step));
+			communicationClient.sendTo(new Message_SW_ServerBased_ShareTraffic(step),worker.name);
 		}
 	}
 
@@ -176,12 +173,9 @@ public class Server implements MessageHandler, Runnable {
 	 * their neighbors in server-based simulation.
 	 */
 	synchronized void askWorkersSimulateOneStep() {
-		boolean isNewNonPubVehiclesAllowed = numInternalNonPubVehiclesAtAllWorkers < Settings.numGlobalRandomBackgroundPrivateVehicles ? true
-				: false;
-		boolean isNewTramsAllowed = numInternalTramsAtAllWorkers < Settings.numGlobalBackgroundRandomTrams ? true
-				: false;
-		boolean isNewBusesAllowed = numInternalBusesAtAllWorkers < Settings.numGlobalBackgroundRandomBuses ? true
-				: false;
+		boolean isNewNonPubVehiclesAllowed = numInternalNonPubVehiclesAtAllWorkers < Settings.numGlobalRandomBackgroundPrivateVehicles;
+		boolean isNewTramsAllowed = numInternalTramsAtAllWorkers < Settings.numGlobalBackgroundRandomTrams;
+		boolean isNewBusesAllowed = numInternalBusesAtAllWorkers < Settings.numGlobalBackgroundRandomBuses;
 
 		// Clear one-step vehicle counts from last step
 		numInternalNonPubVehiclesAtAllWorkers = 0;
@@ -195,7 +189,7 @@ public class Server implements MessageHandler, Runnable {
 				isNewNonPubVehiclesAllowed, isNewTramsAllowed,
 				isNewBusesAllowed, UUID.randomUUID().toString());
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(message);
+			communicationClient.sendTo(message,worker.name);
 		}
 	}
 
@@ -243,7 +237,7 @@ public class Server implements MessageHandler, Runnable {
 		final Message_SW_ChangeSpeed message = new Message_SW_ChangeSpeed(
 				Settings.pauseTimeBetweenStepsInMilliseconds);
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(message);
+			communicationClient.sendTo(message,worker.name);
 		}
 	}
 
@@ -264,19 +258,19 @@ public class Server implements MessageHandler, Runnable {
 			}
 		}
 
-		if (count == workerMetas.size()) {
-			return true;
-		} else {
-			return false;
-		}
+		return count == workerMetas.size();
 
+	}
+	private boolean isAllWorkersReady() {
+		return Settings.numWorkers == workerMetas.size();
 	}
 
 	public void killConnectedWorkers() {
 		final Message_SW_KillWorker msd = new Message_SW_KillWorker(
 				Settings.isSharedJVM);
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(msd);
+			communicationClient.sendTo(msd,worker.name);
+
 		}
 		workerMetas.clear();
 		Settings.isNewEnvironment = true;
@@ -288,7 +282,7 @@ public class Server implements MessageHandler, Runnable {
 			final Message_SW_Serverless_Pause message = new Message_SW_Serverless_Pause(
 					step);
 			for (final WorkerMeta worker : workerMetas) {
-				worker.send(message);
+				communicationClient.sendTo(message,worker.name);
 			}
 		}
 	}
@@ -445,9 +439,17 @@ public class Server implements MessageHandler, Runnable {
 
 	@Override
 	public void run() {
+
+
 		// Load default road network
 		Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
 		roadNetwork = new RoadNetwork();
+
+		// initialise the connection and define all the "topics" that server wants to keep listen to.
+		communicationClient = new ZMQClient(this, Settings.serverListeningPortForWorkers, Arrays.asList("server", "all"));
+
+
+
 
 		// Start GUI or load simulation configuration without GUI
 		if (Settings.isVisualize) {
@@ -456,9 +458,6 @@ public class Server implements MessageHandler, Runnable {
 			acceptInitialConfigFromConsole();
 		}
 
-		// Prepare to receive connection request from workers
-		new IncomingConnectionBuilder(Settings.serverListeningPortForWorkers,
-				this).start();
 	}
 
 	void acceptInitialConfigFromConsole() {
@@ -475,10 +474,12 @@ public class Server implements MessageHandler, Runnable {
 			System.out.println("Please specify the partitioning type [GridGraph, Space-grid].");
 			Settings.partitionType = sc.nextLine();
 		}
+
 		// Kill all connected workers
 		killConnectedWorkers();
 		// Inform user next step
 		System.out.println("Please launch workers now.");
+		communicationClient.waitForWorkersToJoin();
 	}
 
 	void acceptSimStartCommandFromConsole() {
@@ -532,7 +533,7 @@ public class Server implements MessageHandler, Runnable {
 			final Message_SW_Serverless_Resume message = new Message_SW_Serverless_Resume(
 					step);
 			for (final WorkerMeta worker : workerMetas) {
-				worker.send(message);
+				communicationClient.sendTo(message,worker.name);
 			}
 		}
 	}
@@ -614,9 +615,9 @@ public class Server implements MessageHandler, Runnable {
 
 		// Send simulation configuration to workers
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(new Message_SW_Setup(workerMetas, worker,
+			communicationClient.sendTo(new Message_SW_Setup(workerMetas, worker,
 					roadNetwork.edges, step, nodesToAddLight,
-					nodesToRemoveLight, compressedRoadGraph));
+					nodesToRemoveLight, compressedRoadGraph), worker.name);
 		}
 
 		// Initialize output
@@ -630,7 +631,7 @@ public class Server implements MessageHandler, Runnable {
 
 	public void askWorkersChangeLaneBlock(int laneIndex, boolean isBlocked) {
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(new Message_SW_BlockLane(laneIndex, isBlocked));
+			communicationClient.sendTo(new Message_SW_BlockLane(laneIndex, isBlocked), worker.name);
 		}
 	}
 
@@ -656,7 +657,12 @@ public class Server implements MessageHandler, Runnable {
 		if (scriptLoader.retrieveOneSimulationSetup()) {
 			changeMap();
 		}
-		setupNewSim();
+		if (isAllWorkersReady()) {
+			communicationClient.setConnectionOfServerToWorkers(workerMetas);
+
+			setupNewSim();//Simulation();
+		}
+
 	}
 
 	public void stopSim() {
@@ -687,7 +693,7 @@ public class Server implements MessageHandler, Runnable {
 			final Message_SW_Serverless_Stop message = new Message_SW_Serverless_Stop(
 					step);
 			for (final WorkerMeta worker : workerMetas) {
-				worker.send(message);
+				communicationClient.sendTo(message, worker.name);
 				worker.setState(WorkerState.NEW);
 			}
 		}

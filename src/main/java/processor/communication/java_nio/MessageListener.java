@@ -1,10 +1,10 @@
-package processor.communication;
+package processor.communication.java_nio;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.Socket;
-
+import processor.communication.MessageHandler;
 import processor.communication.message.MessageUtil;
 
 /**

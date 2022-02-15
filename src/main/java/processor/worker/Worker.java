@@ -2,19 +2,11 @@ package processor.worker;
 
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.UUID;
+import java.util.*;
 
 import common.Settings;
 import common.SysUtil;
-import processor.communication.IncomingConnectionBuilder;
 import processor.communication.MessageHandler;
-import processor.communication.MessageSender;
 import processor.communication.message.Message_SW_BlockLane;
 import processor.communication.message.Message_SW_ChangeSpeed;
 import processor.communication.message.Message_SW_KillWorker;
@@ -40,6 +32,7 @@ import processor.communication.message.SerializableLaneIndex;
 import processor.communication.message.SerializableVehicle;
 import processor.communication.message.SerializableWorkerMetadata;
 import processor.communication.message.Serializable_GPS_Rectangle;
+import processor.communication.zmq.ZMQClient;
 import processor.server.DataOutputScope;
 import traffic.TrafficNetwork;
 import traffic.light.LightUtil;
@@ -80,7 +73,8 @@ public class Worker implements MessageHandler, Runnable {
 	class ConnectionBuilderTerminationTask extends TimerTask {
 		@Override
 		public void run() {
-			connectionBuilder.terminate();
+
+			communicationClient.terminateConnection(fellowWorkers);
 		}
 	}
 
@@ -98,14 +92,14 @@ public class Worker implements MessageHandler, Runnable {
 		new Worker().run();
 	}
 
+	ZMQClient communicationClient;
+
 	Worker me = this;
-	IncomingConnectionBuilder connectionBuilder;
 	TrafficNetwork trafficNetwork;
 	int step = 0;
 	double timeNow;
 	ArrayList<Fellow> fellowWorkers = new ArrayList<>();
 	String name = "";
-	MessageSender senderForServer;
 	String address = "localhost";
 	int listeningPort;
 	Workarea workarea;
@@ -155,7 +149,7 @@ public class Worker implements MessageHandler, Runnable {
 					step++;
 				}
 				// Finish simulation
-				senderForServer.send(new Message_WS_Serverless_Complete(name, step, trafficNetwork.vehicles.size()));
+				communicationClient.sendTo(new Message_WS_Serverless_Complete(name, step, trafficNetwork.vehicles.size()), "server");
 
 			}
 		};
@@ -163,10 +157,10 @@ public class Worker implements MessageHandler, Runnable {
 
 	void sendTrafficReportInServerlessMode() {
 		if ((step + 1) % Settings.trafficReportStepGapInServerlessMode == 0) {
-			senderForServer
-					.send(new Message_WS_TrafficReport(name, trafficNetwork.vehicles, trafficNetwork.lightCoordinator,
+			communicationClient
+					.sendTo(new Message_WS_TrafficReport(name, trafficNetwork.vehicles, trafficNetwork.lightCoordinator,
 							trafficNetwork.newVehiclesSinceLastReport, step, trafficNetwork.numInternalNonPublicVehicle,
-							trafficNetwork.numInternalTram, trafficNetwork.numInternalBus));
+							trafficNetwork.numInternalTram, trafficNetwork.numInternalBus),"server");
 			trafficNetwork.clearReportedData();
 		}
 	}
@@ -286,16 +280,20 @@ public class Worker implements MessageHandler, Runnable {
 			}
 		}
 
-		connectionBuilder = new IncomingConnectionBuilder(listeningPort, this);
-		connectionBuilder.start();
 
-		senderForServer = new MessageSender(Settings.serverAddress, Settings.serverListeningPortForWorkers);
-
-		name = SysUtil.getRandomID(4);
+		//name = SysUtil.getRandomID(4); // We change it to the ip address + port
+		name = address+":"+ listeningPort;
+		communicationClient = new ZMQClient(this, listeningPort, Arrays.asList("workers", name));
 
 		workarea = new Workarea(name, null);
 
-		senderForServer.send(new Message_WS_Join(name, address, listeningPort));
+		if (!communicationClient.setConnectionOfClientToServer()) {
+			// error in connection
+			System.out.println("problem in connection");
+
+			System.exit(1);
+		}
+		communicationClient.joinToServer(new Message_WS_Join(name, address, listeningPort));
 	}
 
 	void proceedBasedOnSyncMethod() {
@@ -304,14 +302,13 @@ public class Worker implements MessageHandler, Runnable {
 
 		if (isAllFellowsAtState(FellowState.SHARED)) {
 			if (Settings.isServerBased) {
-				senderForServer.send(new Message_WS_ServerBased_SharedMyTrafficWithNeighbor(name));
+				communicationClient.sendTo(new Message_WS_ServerBased_SharedMyTrafficWithNeighbor(name),"server");
 			} else if (isDuringServerlessSim) {
 				sendTrafficReportInServerlessMode();
 
 				// Proceed to next step or finish
 				if (step >= Settings.maxNumSteps) {
-					senderForServer
-							.send(new Message_WS_Serverless_Complete(name, step, trafficNetwork.vehicles.size()));
+					communicationClient.sendTo(new Message_WS_Serverless_Complete(name, step, trafficNetwork.vehicles.size()),"server");
 					resetTraffic();
 				} else if (!isPausingServerlessSim) {
 					step++;
@@ -371,6 +368,7 @@ public class Worker implements MessageHandler, Runnable {
 		for (final Fellow fellowWorker : connectedFellows) {
 			fellowWorker.prepareCommunication();
 		}
+		communicationClient.connectToWorkers(connectedFellows);
 	}
 
 	@Override
@@ -406,8 +404,8 @@ public class Worker implements MessageHandler, Runnable {
 			final TimerTask progressTimerTask = new TimerTask() {
 				@Override
 				public void run() {
-					senderForServer.send(new Message_WS_SetupCreatingVehicles(
-							trafficNetwork.vehicles.size() - numVehicleCreatedSinceLastSetupProgressReport));
+					communicationClient.sendTo(new Message_WS_SetupCreatingVehicles(
+							trafficNetwork.vehicles.size() - numVehicleCreatedSinceLastSetupProgressReport),"server");
 					numVehicleCreatedSinceLastSetupProgressReport = trafficNetwork.vehicles.size();
 				}
 			};
@@ -426,7 +424,7 @@ public class Worker implements MessageHandler, Runnable {
 			progressTimer.cancel();
 
 			// Let server know that setup is done
-			senderForServer.send(new Message_WS_SetupDone(name, connectedFellows.size()));
+			communicationClient.sendTo(new Message_WS_SetupDone(name, connectedFellows.size()),"server");
 		} else if (message instanceof Message_SW_ServerBased_ShareTraffic) {
 			final Message_SW_ServerBased_ShareTraffic messageToProcess = (Message_SW_ServerBased_ShareTraffic) message;
 
@@ -444,10 +442,9 @@ public class Worker implements MessageHandler, Runnable {
 
 			simulation.simulateOneStep(this, messageToProcess.isNewNonPubVehiclesAllowed,
 					messageToProcess.isNewTramsAllowed, messageToProcess.isNewBusesAllowed);
-			senderForServer
-					.send(new Message_WS_TrafficReport(name, trafficNetwork.vehicles, trafficNetwork.lightCoordinator,
+			communicationClient.sendTo(new Message_WS_TrafficReport(name, trafficNetwork.vehicles, trafficNetwork.lightCoordinator,
 							trafficNetwork.newVehiclesSinceLastReport, step, trafficNetwork.numInternalNonPublicVehicle,
-							trafficNetwork.numInternalTram, trafficNetwork.numInternalBus));
+							trafficNetwork.numInternalTram, trafficNetwork.numInternalBus),"server");
 			trafficNetwork.clearReportedData();
 		} else if (message instanceof Message_SW_Serverless_Start) {
 			final Message_SW_Serverless_Start messageToProcess = (Message_SW_Serverless_Start) message;
@@ -606,7 +603,7 @@ public class Worker implements MessageHandler, Runnable {
 	 */
 	void transferVehicleDataToFellow() {
 		for (final Fellow fellowWorker : connectedFellows) {
-			fellowWorker.send(new Message_WW_Traffic(name, fellowWorker, step));
+			communicationClient.sendTo(new Message_WW_Traffic(name, fellowWorker, step),fellowWorker.name);
 			updateFellowState(fellowWorker.name, FellowState.SHARING_DATA_SENT);
 			fellowWorker.vehiclesToCreateAtBorder.clear();
 		}

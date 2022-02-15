@@ -1,5 +1,6 @@
-package processor.communication;
+package processor.communication.java_nio;
 
+import processor.communication.MessageHandler;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;

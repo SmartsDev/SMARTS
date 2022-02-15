@@ -1,4 +1,4 @@
-package processor.communication;
+package processor.communication.java_nio;
 
 import java.io.IOException;
 import java.io.PrintWriter;

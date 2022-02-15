@@ -2,7 +2,6 @@ package processor.server;
 
 import java.util.ArrayList;
 
-import processor.communication.MessageSender;
 import processor.communication.message.SerializableExternalVehicle;
 import processor.worker.Workarea;
 import traffic.road.GridCell;
@@ -14,12 +13,13 @@ public class WorkerMeta {
 	public String name;
 	public Workarea workarea;
 	public double laneLengthRatioAgainstWholeMap;
-	public MessageSender sender;
 	public int numRandomPrivateVehicles;
 	public int numRandomTrams;
 	public int numRandomBuses;
 	public WorkerState state = WorkerState.NEW;
 	public ArrayList<SerializableExternalVehicle> externalRoutes = new ArrayList<>();
+	public int port;
+	public String address;
 
 	/**
 	 *
@@ -32,12 +32,10 @@ public class WorkerMeta {
 	 */
 	public WorkerMeta(final String name, final String address, final int port) {
 		this.name = name;
+		this.port = port;
+		this.address = address;
 		workarea = new Workarea(name, new ArrayList<GridCell>());
-		sender = new MessageSender(address, port);
-	}
 
-	void send(final Object message) {
-		sender.send(message);
 	}
 
 	public void setState(final WorkerState state) {

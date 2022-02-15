@@ -17,8 +17,8 @@ public class SerializableWorkerMetadata {
 
 	public SerializableWorkerMetadata(final WorkerMeta worker) {
 		name = worker.name;
-		address = worker.sender.address;
-		port = worker.sender.port;
+		address = worker.address;
+		port = worker.port;
 		gridCells = getSerializableGridCells(worker);
 	}
 

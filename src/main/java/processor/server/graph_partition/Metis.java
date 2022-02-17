@@ -19,7 +19,7 @@ import java.io.*;
 import java.util.*;
 
 public class Metis {
-    public final static RegularFile CMD = new RegularFile(new Directory("/usr/local/bin/"), "gpmetis");
+    public final static RegularFile CMD = new RegularFile(new Directory("/usr/bin/"), "gpmetis");
     
     public static void ensureCompiled(Logger logger)
     {

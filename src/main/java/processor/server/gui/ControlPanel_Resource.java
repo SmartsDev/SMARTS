@@ -35,8 +35,9 @@ public class ControlPanel_Resource extends JPanel {
 					GuiUtil.setEnabledStatusOfComponents(parentPanel.cpMiscConfig, false);
 					server.killConnectedWorkers();
 					updateNumConnectedWorkers(0);
-//					Settings.partitionType = .getText();
+
 					Settings.numWorkers = Integer.parseInt(textField_numWorkerRequired.getText());
+					server.resetConnectionOfWorkers();
 					if (Settings.isSharedJVM) {
 						Simulator.createWorkers();
 					}

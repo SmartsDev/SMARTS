@@ -902,7 +902,6 @@ public class ControlPanel_MiscConfig extends JPanel {
 	}
 
 	void setupNewSim() {
-
 		// Disable setup panel
 		GuiUtil.setEnabledStatusOfComponents(this, false);
 
@@ -936,7 +935,6 @@ public class ControlPanel_MiscConfig extends JPanel {
 						.getSelectedItem());
 
 		gui.server.setupNewSim();
-		//TODO: fix this for zmq
 		monitor.startSetupProgress();
 	}
 }

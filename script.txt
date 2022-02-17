@@ -5,4 +5,5 @@ outputSimulationLog true
 lookAheadDistance 100
 numStepsPerSecond 5
 driveOnLeft true
+serverBased false
 ###

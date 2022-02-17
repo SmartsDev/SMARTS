@@ -289,7 +289,7 @@ public class Worker implements MessageHandler, Runnable {
 
 		if (!communicationClient.setConnectionOfClientToServer()) {
 			// error in connection
-			System.out.println("problem in connection");
+			System.out.println("Problem in connection");
 
 			System.exit(1);
 		}
@@ -465,8 +465,9 @@ public class Worker implements MessageHandler, Runnable {
 			// Quit depending on how the worker was started
 			if (messageToProcess.isSharedJVM) {
 				final ConnectionBuilderTerminationTask task = new ConnectionBuilderTerminationTask();
-				new Timer().schedule(task, 1);
+				new Timer().schedule(task, 0);
 			} else {
+				communicationClient.terminateConnection(fellowWorkers);
 				System.exit(0);
 			}
 		} else if (message instanceof Message_SW_Serverless_Stop) {

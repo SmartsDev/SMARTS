@@ -27,7 +27,7 @@ import java.util.Queue;
 public class ZMQClient {
     Subscriber subscriber;
     Publisher publisher;
-    Receive receiver;
+    public Receive receiver;
     MessageHandler handler;
     int port;
     ZContext context;
@@ -51,8 +51,6 @@ public class ZMQClient {
             subscriber.connect(worker.address, worker.port);
         }
 
-        
-       
         System.out.println("subscribe to topic: "+topics);
         subscriber.subscribe(topics);
         subscriber.listen();
@@ -61,11 +59,6 @@ public class ZMQClient {
 
     public void waitForWorkersToJoin(){
 
-        receiver.listenForSettingUp();
-
-    }
-    public void waitForRemoteControlToJoin(){
-        System.out.println("Waiting for RemoteControl to join...");
         receiver.listenForSettingUp();
 
     }
@@ -88,6 +81,7 @@ public class ZMQClient {
     public void joinToServer(Object message){
         // it will only fire once
         request.sendRequest(message);
+        request.closeRequest();
 
     }
 
@@ -113,12 +107,11 @@ public class ZMQClient {
         request.closeRequest();
         receiver.close();
         publisher.close();
-        for(Fellow w:workers){
-            subscriber.disconnect(w.getAddress(),w.getPort());
+        for (Fellow w : workers) {
+            subscriber.disconnect(w.getAddress(), w.getPort());
         }
         subscriber.shutdown();
         subscriber.close();
-
     }
 
 

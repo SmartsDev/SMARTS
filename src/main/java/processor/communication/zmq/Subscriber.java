@@ -10,7 +10,7 @@ import java.util.List;
  * This subscriber class to keep listening for messages with a specific topics.
  */
 public class Subscriber {
-    private ZMQ.Socket subscriber;
+    private final ZMQ.Socket subscriber;
     MessageHandler messageHandler = null;
     Thread listenerThread;
 
@@ -37,14 +37,15 @@ public class Subscriber {
     }
     public void shutdown(){
         listenerThread.interrupt();
+        listenerThread.stop();
     }
     public void disconnect(String add,int port){
         subscriber.disconnect("tcp://" + add + ":" + port);
     }
 
     public void close() {
-
+        subscriber.setLinger(0);
         subscriber.close();
-        //subscriber.setLinger(0);
+
     }
 }

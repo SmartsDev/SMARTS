@@ -15,6 +15,7 @@ public class Receive {
     private ZMQ.Socket receiver;
     private MessageHandler handler;
     private MessageUtil messageUtil = new MessageUtil();
+    public static int count;
 
     Receive(ZContext context, MessageHandler messageHandler, int _port) {
         this.handler = messageHandler;
@@ -23,7 +24,7 @@ public class Receive {
     }
 
     void listenForSettingUp(){
-        int count = 0;
+        count = 0;
         while (count < Settings.numWorkers) {
             count++;
             String msg = receiver.recvStr(Charset.defaultCharset());
@@ -34,7 +35,12 @@ public class Receive {
     }
 
     public void close(){
-        receiver.close();
+        count = 0;
         receiver.setLinger(0);
+        receiver.close();
+    }
+
+    public void resetCounter() {
+        count=0;
     }
 }

@@ -28,8 +28,6 @@ public class MessageListener implements Runnable {
 		while (!Thread.currentThread().isInterrupted()) {
 			String topic = subscriber.recvStr(Charset.defaultCharset());
 			String msg = subscriber.recvStr(0, Charset.defaultCharset());
-
-
 			service.submit(new MessageProcessRunnable(msg));
 
 		}

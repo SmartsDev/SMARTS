@@ -454,6 +454,7 @@ public class Server implements MessageHandler, Runnable {
 		// Start GUI or load simulation configuration without GUI
 		if (Settings.isVisualize) {
 			buildGui();
+			openConnectionForWorkers();
 		} else {
 			acceptInitialConfigFromConsole();
 		}
@@ -479,7 +480,7 @@ public class Server implements MessageHandler, Runnable {
 		killConnectedWorkers();
 		// Inform user next step
 		System.out.println("Please launch workers now.");
-		communicationClient.waitForWorkersToJoin();
+		openConnectionForWorkers();
 	}
 
 	void acceptSimStartCommandFromConsole() {
@@ -589,11 +590,12 @@ public class Server implements MessageHandler, Runnable {
 		for (final WorkerMeta worker : workerMetas) {
 			worker.setState(WorkerState.NEW);
 		}
-
 		// In a new environment (map), determine the work areas for all workers
 		if (Settings.isNewEnvironment) {
 			roadNetwork.buildGrid();
 			WorkloadBalancer.partitionGridCells(workerMetas, roadNetwork);
+			communicationClient.setConnectionOfServerToWorkers(workerMetas);
+
 		}
 
 		// Determine the number of internal vehicles at all workers
@@ -658,7 +660,7 @@ public class Server implements MessageHandler, Runnable {
 			changeMap();
 		}
 		if (isAllWorkersReady()) {
-			communicationClient.setConnectionOfServerToWorkers(workerMetas);
+
 
 			setupNewSim();//Simulation();
 		}
@@ -730,5 +732,13 @@ public class Server implements MessageHandler, Runnable {
 				break;
 			}
 		}
+	}
+
+	public void openConnectionForWorkers() {
+		communicationClient.waitForWorkersToJoin();
+	}
+
+	public void resetConnectionOfWorkers() {
+		communicationClient.receiver.resetCounter();
 	}
 }

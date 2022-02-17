@@ -10,20 +10,14 @@ import processor.communication.message.MessageUtil;
 public class Publisher {
     private final ZMQ.Socket publisher;
     private final MessageUtil messageUtil = new MessageUtil();
+    int port;
 
     Publisher(ZContext context, int PORT) {
 
         publisher = context.createSocket(ZMQ.PUB);
-
-        publisher.bind("tcp://*:" + PORT);
+        port = PORT;
+        publisher.bind("tcp://*:" + port);
     }
-
-    void send(String message, String topic) {
-        publisher.sendMore(topic);
-        publisher.send(message, 0);
-    }
-
-
 
     void send(Object message, String topic) {
         publisher.sendMore(topic);
@@ -33,6 +27,7 @@ public class Publisher {
 
 
     public void close() {
+        publisher.setLinger(0);
         publisher.close();
 
     }

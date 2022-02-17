@@ -5,7 +5,7 @@ import org.zeromq.ZMQ;
 import processor.communication.message.MessageUtil;
 
 /**
- * Created by emanb on 15/09/15.
+ * This class is to join to the system.
  */
 public class Request {
     ZMQ.Socket sender;
@@ -22,7 +22,6 @@ public class Request {
     public void sendRequest( Object msg){
         sender.connect("tcp://"+ temproryAddress);
         String msgStr = messageUtil.compose(msg);
-
         sender.send(msgStr);
         sender.disconnect("tcp://"+ temproryAddress);
         sender.close();

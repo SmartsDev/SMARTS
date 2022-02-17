@@ -1,2 +1,0 @@
-Time Stamp, Real Time (s), Simulation Time (s), # of Worker-Worker Connections, Partitioning Type, Average Travel Speed (km/h)
-Tue Feb 15 12:07:05 AST 2022,600.0,43.776160649000104,10,Space-grid,1.167679423532692

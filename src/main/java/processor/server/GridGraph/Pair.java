@@ -1,4 +1,4 @@
-package processor.server.graph_partition;
+package processor.server.GridGraph;
 
 
 import java.util.Objects;

@@ -131,6 +131,6 @@ public class Settings {
 	 */
 
 	public static String partitionType = "Space-grid";
-	public static String pathToGpmetis = "/usr/bin/";//.. [/usr/local/bin/]
+	public static String pathToGpmetis = "/usr/bin/";//..for mac OS use this path [/usr/local/bin/]
 
 }

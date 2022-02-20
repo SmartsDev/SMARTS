@@ -1,5 +1,6 @@
-package processor.server.graph_partition;
+package processor.server.GridGraph;
 
+import common.Settings;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultWeightedEdge;
@@ -19,8 +20,9 @@ import java.io.*;
 import java.util.*;
 
 public class Metis {
-    public final static RegularFile CMD = new RegularFile(new Directory("/usr/bin/"), "gpmetis");
-    
+
+    public final static RegularFile CMD = new RegularFile(new Directory(Settings.pathToGpmetis), "gpmetis");
+
     public static void ensureCompiled(Logger logger)
     {
         if (!CMD.exists())

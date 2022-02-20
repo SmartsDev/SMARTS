@@ -1,4 +1,4 @@
-package processor.server.graph_partition;
+package processor.server.GridGraph;
 
 import common.Settings;
 import org.jgrapht.Graph;

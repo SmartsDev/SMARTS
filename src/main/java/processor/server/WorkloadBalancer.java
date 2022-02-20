@@ -3,8 +3,7 @@ package processor.server;
 import java.util.*;
 
 import common.Settings;
-import it.unimi.dsi.fastutil.ints.IntSet;
-import processor.server.graph_partition.GraphGenerator;
+import processor.server.GridGraph.GraphGenerator;
 import traffic.road.GridCell;
 import traffic.road.RoadNetwork;
 

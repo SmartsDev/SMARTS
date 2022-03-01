@@ -512,12 +512,6 @@ public class VehicleUtil {
 				return;
 			}
 
-			// Ignore yellow lights if the vehicle is making a turn
-			if ((vehicle.edgeBeforeTurnLeft == vehicle.lane.edge || vehicle.edgeBeforeTurnRight == vehicle.lane.edge)
-					&& (targetEdge.lightColor == LightColor.GYR_Y)) {
-				return;
-			}
-
 			// Flags the event that vehicle is within certain distance to light
 			if (targetEdge.endNode.light && (((examinedDist + targetEdge.length)
 					- vehicle.headPosition) < Settings.trafficLightDetectionDistance)) {
@@ -611,10 +605,12 @@ public class VehicleUtil {
 	void updateImpedingObject_Turn(final Vehicle vehicle, final double examinedDist,
 			final int indexLegOnRouteBeingChecked, final Vehicle slowdownObj) {
 		Edge edgeBeingChecked = vehicle.routeLegs.get(indexLegOnRouteBeingChecked).edge;
-		slowdownObj.headPosition = examinedDist + edgeBeingChecked.length + (VehicleType.VIRTUAL_SLOW.maxSpeed * 3);//The virtual object is a few seconds ahead 
-		slowdownObj.type = VehicleType.VIRTUAL_SLOW;
-		slowdownObj.speed = VehicleType.VIRTUAL_SLOW.maxSpeed;
-		slowdownObj.length = 0;
+		if (vehicle.edgeBeforeTurnLeft == edgeBeingChecked ||vehicle.edgeBeforeTurnRight == edgeBeingChecked) {		
+			slowdownObj.headPosition = examinedDist + edgeBeingChecked.length + (VehicleType.VIRTUAL_SLOW.maxSpeed * 3);//The virtual object is a few seconds ahead 
+			slowdownObj.type = VehicleType.VIRTUAL_SLOW;
+			slowdownObj.speed = VehicleType.VIRTUAL_SLOW.maxSpeed;
+			slowdownObj.length = 0;
+		}
 	}
 
 }

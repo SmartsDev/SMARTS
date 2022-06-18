@@ -459,14 +459,7 @@ public class TrafficNetwork extends RoadNetwork {
 		}
 	}
 
-	boolean isRouteLegWithinWorkarea(RouteLeg leg) {
-		if (!workareaCells.contains(leg.edge.startNode.gridCell)
-				|| !workareaCells.contains(leg.edge.endNode.gridCell)) {
-			return false;
-		} else {
-			return true;
-		}
-	}
+	
 
 	/**
 	 * Generate a route.

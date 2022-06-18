@@ -10,23 +10,9 @@ public enum RoadType {
 			60, 2), primary_link(9, 60, 1), secondary(7, 50, 2), secondary_link(7, 50, 1), tertiary(5, 40,
 					2), tertiary_link(5, 40, 1), residential(3, 40, 2), unclassified(2, 50, 2), service(1, 30, 1);
 
-	public static boolean hasValue(final String value) {
-		for (final RoadType type : values()) {
-			if (type.name().equals(value)) {
-				return true;
-			}
-		}
-		return false;
-	}
+	
 
-	public static boolean match(final RoadType type, final String[] values) {
-		for (final String value : values) {
-			if (type.name().equals(value)) {
-				return true;
-			}
-		}
-		return false;
-	}
+	
 
 	/**
 	 * Priority of the road. Vehicles on a low-priority road may need to give

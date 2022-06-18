@@ -546,21 +546,6 @@ public class Server implements MessageHandler, Runnable {
 		}
 	}
 
-	ArrayList<double[]> setRouteSourceDestinationWindow(
-			final ArrayList<Serializable_GPS_Rectangle> sList) {
-		final ArrayList<double[]> list = new ArrayList<>();
-		for (final Serializable_GPS_Rectangle sgr : sList) {
-			// Skip the zero item when the list does not have meaningful items
-			if ((sgr.minLon == 0) && (sgr.maxLat == 0) && (sgr.maxLon == 0)
-					&& (sgr.minLat == 0)) {
-				continue;
-			}
-			list.add(new double[] { sgr.minLon, sgr.maxLat, sgr.maxLon,
-					sgr.minLat });
-		}
-		return list;
-	}
-
 	/**
 	 * Resets dynamic fields and sends simulation configuration to workers. The
 	 * workers will set up simulation environment upon receiving the

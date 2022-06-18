@@ -72,15 +72,7 @@ public class VehicleUtil {
 		}
 	}
 
-	public static double getAverageSpeedOfTrip(final Vehicle vehicle) {
-		// Get total road length in the trip
-		double length = 0;
-		for (final RouteLeg leg : vehicle.routeLegs) {
-			length += leg.edge.length;
-		}
-		// Return average speed
-		return (length / vehicle.timeTravel) * 3.6;
-	}
+	
 
 	/**
 	 * Get the closest vehicle whose head position is behind the head position

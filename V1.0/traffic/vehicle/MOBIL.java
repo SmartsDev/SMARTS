@@ -129,14 +129,7 @@ public class MOBIL {
 
 	}
 
-	double getLowerAcceleration(final Vehicle vehicle, final double acc1, final double acc2,
-			final SlowdownFactor factor) {
-		if (acc1 > acc2) {
-			return acc2;
-		} else {
-			return acc1;
-		}
-	}
+	
 
 	/**
 	 * Gets the potential acceleration of vehicle if it changes to the given

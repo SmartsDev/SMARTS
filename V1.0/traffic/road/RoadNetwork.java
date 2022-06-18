@@ -223,31 +223,7 @@ public class RoadNetwork {
 		}
 	}
 
-	/**
-	 * Find the next edge adjacent to a specified edge on the same road
-	 *
-	 * @param currentEdge
-	 * @param searchStartNode
-	 * @return
-	 */
-	public Edge findNextEdgeOnRoad(final Edge currentEdge,
-			final boolean searchStartNode) {
-		ArrayList<Edge> edgesToSearch = null;
-		if (searchStartNode) {
-			edgesToSearch = currentEdge.startNode.inwardEdges;
-		} else {
-			edgesToSearch = currentEdge.endNode.outwardEdges;
-		}
-		for (final Edge edge : edgesToSearch) {
-			if (edge.name.equals(currentEdge.name)) {
-				if ((edge.startNode != currentEdge.endNode)
-						|| (edge.endNode != currentEdge.startNode)) {
-					return edge;
-				}
-			}
-		}
-		return null;
-	}
+	
 
 	/**
 	 * Get the index of the nearest edge to a given point.
@@ -314,61 +290,7 @@ public class RoadNetwork {
 		}
 	}
 
-	public HashSet<Edge> getEdgesOnGivenRoadAtGivenAngle(final String roadName,
-			final double inputStartLat, final double inputStartLon,
-			final double inputEndLat, final double inputEndLon) {
-		final double latPerRow = Math.abs(maxLat - minLat)
-				/ Settings.numGridRows;
-		final double lonPerCol = Math.abs(maxLon - minLon)
-				/ Settings.numGridCols;
-		final int row = (int) Math.floor(Math.abs(inputStartLat - minLat)
-				/ latPerRow);
-		final int col = (int) Math.floor(Math.abs(inputStartLon - minLon)
-				/ lonPerCol);
-		final double maxLat = inputStartLat > inputEndLat ? inputStartLat
-				: inputEndLat;
-		final double maxLon = inputStartLon > inputEndLon ? inputStartLon
-				: inputEndLon;
-		final double minLat = inputStartLat < inputEndLat ? inputStartLat
-				: inputEndLat;
-		final double minLon = inputStartLon < inputEndLon ? inputStartLon
-				: inputEndLon;
-		final double angleRangeInRadians = Math.PI / 2.0;
-		final double angleInput = Math.atan2(inputEndLat - inputStartLat,
-				inputEndLon - inputStartLon);
-		final HashSet<Edge> edgesFound = new HashSet<>();
-		for (int i = row - 1; i <= (row + 1); i++) {
-			if ((i < 0) || (i >= Settings.numGridRows)) {
-				continue;
-			}
-			for (int j = col - 1; j <= (col + 1); j++) {
-				if ((j < 0) || (j >= Settings.numGridCols)) {
-					continue;
-				}
-				for (final Node node : grid[i][j].nodes) {
-					if ((node.lat < minLat) || (node.lat > maxLat)
-							|| (node.lon < minLon) || (node.lon > maxLon)) {
-						continue;
-					}
-					for (final Edge edge : node.outwardEdges) {
-						// Edge's name must match the given name
-						if (edge.name.equals(roadName)) {
-							// Edge's angle should be similar to that of the
-							// given segment
-							final double angleEdge = Math.atan2(
-									edge.endNode.lat - edge.startNode.lat,
-									edge.endNode.lon - edge.startNode.lon);
-							if (Math.abs(angleInput - angleEdge) > angleRangeInRadians) {
-								continue;
-							}
-							edgesFound.add(edge);
-						}
-					}
-				}
-			}
-		}
-		return edgesFound;
-	}
+	
 
 	public double getShortestGpsDistBtwTwoEdges(Line2D seg1, Line2D seg2) {
 		if(seg1.intersectsLine(seg2)){
@@ -458,65 +380,7 @@ public class RoadNetwork {
 		return edgesFound;
 	}
 
-	/**
-	 * Get street names near a given point.
-	 */
-	public HashSet<String> getStreetNamesNearPoint(final double lat,
-			final double lon) {
-		final HashSet<String> names = new HashSet<>();
-		final double latPerRow = Math.abs(maxLat - minLat)
-				/ Settings.numGridRows;
-		final double lonPerCol = Math.abs(maxLon - minLon)
-				/ Settings.numGridCols;
-		final int row = (int) Math.floor(Math.abs(lat - minLat) / latPerRow);
-		final int col = (int) Math.floor(Math.abs(lon - minLon) / lonPerCol);
-		final double scanRange = 30;
-		for (int i = row - 1; i <= (row + 1); i++) {
-			if ((i < 0) || (i >= Settings.numGridRows)) {
-				continue;
-			}
-			for (int j = col - 1; j <= (col + 1); j++) {
-				if ((j < 0) || (j >= Settings.numGridCols)) {
-					continue;
-				}
-				for (final Node node : grid[i][j].nodes) {
-					for (final Edge edge : node.inwardEdges) {
-						/*
-						 * Skip edges whose bounding rectangle does not contain
-						 * the point.
-						 */
-						if ((edge.startNode.lat < lat)
-								&& (edge.endNode.lat < lat)) {
-							continue;
-						}
-						if ((edge.startNode.lon < lon)
-								&& (edge.endNode.lon < lon)) {
-							continue;
-						}
-						if ((edge.startNode.lat > lat)
-								&& (edge.endNode.lat > lat)) {
-							continue;
-						}
-						if ((edge.startNode.lon > lon)
-								&& (edge.endNode.lon > lon)) {
-							continue;
-						}
-
-						final double distToEdge = Line2D.ptLineDist(
-								edge.startNode.lon, edge.startNode.lat
-										* Settings.lonVsLat, edge.endNode.lon,
-								edge.endNode.lat * Settings.lonVsLat, lon, lat
-										* Settings.lonVsLat);
-						if ((distToEdge < scanRange)
-								&& (edge.name.length() > 0)) {
-							names.add(edge.name);
-						}
-					}
-				}
-			}
-		}
-		return names;
-	}
+	
 
 	/**
 	 * Construct a road network graph based on nodes and edges using a text file

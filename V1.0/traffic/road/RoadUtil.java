@@ -313,11 +313,7 @@ public class RoadUtil {
 		return points;
 	}
 
-	public static double getLatitudeDegreePerMeter(final double latitude) {
-		final double dist = getDistInMeters(latitude - 0.0005, 0,
-				latitude + 0.0005, 0);
-		return 0.001 / dist;
-	}
+	
 
 	public static double getLongitudeDegreePerMeter(final double latitude) {
 		final double dist = getDistInMeters(latitude, -0.0005, latitude, 0.0005);
@@ -364,14 +360,7 @@ public class RoadUtil {
 		return null;
 	}
 
-	public static boolean isEdgeBlocked(final Edge edge) {
-		for (final Lane l : edge.lanes) {
-			if (!l.isBlocked) {
-				return false;
-			}
-		}
-		return true;
-	}
+	
 
 	public static boolean isEdgeOnPathOfPriorityVehicle(final Edge edge) {
 		for (final Lane l : edge.lanes) {

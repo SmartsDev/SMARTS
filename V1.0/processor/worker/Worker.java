@@ -611,11 +611,7 @@ public class Worker implements MessageHandler, Runnable {
 		}
 	}
 
-	void unblockLanes(final ArrayList<SerializableLaneIndex> unblockedLaneIndex) {
-		for (final SerializableLaneIndex item : unblockedLaneIndex) {
-			trafficNetwork.lanes.get(item.index).isBlocked = false;
-		}
-	}
+	
 
 	void updateFellowState(final String workerName, final FellowState newState) {
 		for (final Fellow fellow : connectedFellows) {

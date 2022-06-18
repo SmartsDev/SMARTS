@@ -1019,28 +1019,10 @@ public class MonitorPanel extends JPanel {
 	double[] getCoordOfQueryWindow() {
 		return new double[] { queryWindowTopLeft.x, queryWindowTopLeft.y, queryWindowBottomRight.x,
 				queryWindowBottomRight.y };
-	}
-
-	/**
-	 * Calculate the latitude of the center of display panel.
-	 */
-	double getDisplayPanelCenterLatitude() {
-		return convertYToLat(0.5 * displayPanelDimension.height);
-	}
-
-	/**
-	 * Calculate the longitude of the center of display panel.
-	 */
-	double getDisplayPanelCenterLongitude() {
-		return convertXToLon(0.5 * displayPanelDimension.width);
-	}
+	}	
 
 	double getMetersPerPixel(final double latitude, final int zoom) {
 		return (Math.cos((latitude * Math.PI) / 180) * 2 * Math.PI * 6371000) / (256 * (Math.pow(2, zoom)));
-	}
-
-	Edge getSelectedRoadEdge() {
-		return server.roadNetwork.edges.get(roadEdgeAtMousePoint.index);
 	}
 
 	Node getSelectedRoadIntersectionNode() {

@@ -158,12 +158,4 @@ public class Message_WS_TrafficReport {
 		return list;
 	}
 
-	ArrayList<SerializableVehicleSpeed> getVehicleSpeedList(final ArrayList<Double> vehicleSpeedOnCalibratedEdges) {
-		final ArrayList<SerializableVehicleSpeed> list = new ArrayList<>();
-		for (final double speed : vehicleSpeedOnCalibratedEdges) {
-			list.add(new SerializableVehicleSpeed(speed));
-		}
-		return list;
-	}
-
 }

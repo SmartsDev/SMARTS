@@ -19,15 +19,7 @@ public class RouteUtil {
 		return new RouteLeg(edges.get(edgeIndex), stopDuration);
 	}
 
-	public static double getTotalDistanceOfRoute(
-			final ArrayList<RouteLeg> routeLegs) {
-		double distance = 0;
-		for (int i = 1; i < routeLegs.size(); i++) {
-			final RouteLeg leg = routeLegs.get(i);
-			distance += leg.edge.length;
-		}
-		return distance;
-	}
+	
 
 	static Node findRepeatedNode(final ArrayList<RouteLeg> routeLegs) {
 		final HashMap<Integer, Integer> indexList = new HashMap<>();

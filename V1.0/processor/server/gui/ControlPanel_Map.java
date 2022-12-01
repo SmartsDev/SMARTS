@@ -48,6 +48,7 @@ public class ControlPanel_Map extends JPanel {
 
 	private final JCheckBox chckbxRoadNetworkGraph;
 	private final JCheckBox chckbxStaticMapImage;
+	private final JCheckBox chckbxPlaceNames;
 	private MonitorPanel monitorPanel;
 	public final JButton btnLoadOpenstreetmapFile;
 	private final JFileChooser fc = new JFileChooser();
@@ -65,7 +66,7 @@ public class ControlPanel_Map extends JPanel {
 
 	public ControlPanel_Map(final GUI gui) {
 		this.gui = gui;
-		setPreferredSize(new Dimension(450, 466));
+		setPreferredSize(new Dimension(450, 472));
 
 		// Set default directory of file chooser
 		final File workingDirectory = new File(System.getProperty("user.dir"));
@@ -76,20 +77,20 @@ public class ControlPanel_Map extends JPanel {
 		chckbxRoadNetworkGraph.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		chckbxRoadNetworkGraph.setSelected(true);
 
-		chckbxStaticMapImage = new JCheckBox(
+		chckbxPlaceNames = new JCheckBox(
 				"Show place names from GeoNames.org");
-		chckbxStaticMapImage.setBounds(20, 33, 283, 23);
-		chckbxStaticMapImage.setFont(new Font("Tahoma", Font.PLAIN, 13));
+		chckbxPlaceNames.setBounds(20, 69, 283, 23);
+		chckbxPlaceNames.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
 		btnLoadOpenstreetmapFile = new JButton(
 				"Import roads from OpenStreetMap file");
-		btnLoadOpenstreetmapFile.setBounds(20, 385, 261, 34);
+		btnLoadOpenstreetmapFile.setBounds(20, 421, 261, 34);
 		btnLoadOpenstreetmapFile.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		loadRegionCentroids();
 		fillCountryNameToList();
 
 		lblSelectablePlaces = new JLabel("Road map areas");
-		lblSelectablePlaces.setBounds(20, 110, 94, 25);
+		lblSelectablePlaces.setBounds(20, 146, 94, 25);
 		setLayout(null);
 		listCountryName.setBounds(1, 1, 298, 237);
 
@@ -97,10 +98,10 @@ public class ControlPanel_Map extends JPanel {
 		listCountryName.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		add(listCountryName);
 		final JScrollPane listScroller = new JScrollPane(listCountryName);
-		listScroller.setBounds(20, 137, 300, 239);
+		listScroller.setBounds(20, 173, 300, 239);
 
 		btnCenterMapToSelectedPlace = new JButton("Locate");
-		btnCenterMapToSelectedPlace.setBounds(332, 135, 79, 25);
+		btnCenterMapToSelectedPlace.setBounds(332, 171, 79, 25);
 		btnCenterMapToSelectedPlace.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		btnCenterMapToSelectedPlace.addActionListener(new ActionListener() {
 			public void actionPerformed(final ActionEvent arg0) {
@@ -130,7 +131,7 @@ public class ControlPanel_Map extends JPanel {
 			}
 		});
 		add(chckbxRoadNetworkGraph);
-		add(chckbxStaticMapImage);
+		add(chckbxPlaceNames);
 		add(listScroller);
 		add(lblSelectablePlaces);
 		add(btnCenterMapToSelectedPlace);
@@ -139,13 +140,13 @@ public class ControlPanel_Map extends JPanel {
 
 		lblPlaceNamesAre = new JLabel("Place names are from ");
 		lblPlaceNamesAre.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblPlaceNamesAre.setBounds(45, 60, 132, 16);
+		lblPlaceNamesAre.setBounds(45, 96, 132, 16);
 		lblPlaceNamesAre.setHorizontalAlignment(SwingConstants.LEFT);
 		add(lblPlaceNamesAre);
 		
 		lblCities = new JLabel("cities500");
 		lblCities.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblCities.setBounds(177, 51,  55, 34);
+		lblCities.setBounds(177, 87,  55, 34);
 		lblCities.addMouseListener(new MouseAdapter() {
 			@Override
 		    public void mouseEntered(MouseEvent e) {
@@ -172,7 +173,7 @@ public class ControlPanel_Map extends JPanel {
 		
 		lblBy = new JLabel("by GeoNames.org");//https://www.geonames.org/
 		lblBy.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblBy.setBounds(234, 51, 132, 34);
+		lblBy.setBounds(234, 87, 132, 34);
 		lblBy.addMouseListener(new MouseAdapter() {
 			@Override
 		    public void mouseEntered(MouseEvent e) {
@@ -199,7 +200,7 @@ public class ControlPanel_Map extends JPanel {
 		
 		lblLicence = new JLabel("licensed under a Creative Commons Attribution 4.0 License");
 		lblLicence.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblLicence.setBounds(45, 76, 367, 34);
+		lblLicence.setBounds(45, 112, 367, 34);
 		lblLicence.addMouseListener(new MouseAdapter() {
 			@Override
 		    public void mouseEntered(MouseEvent e) {
@@ -223,6 +224,10 @@ public class ControlPanel_Map extends JPanel {
 		    }
 		});
 		add(lblLicence);
+		
+		chckbxStaticMapImage = new JCheckBox("Show map image in background");
+		chckbxStaticMapImage.setBounds(20, 35, 212, 25);
+		add(chckbxStaticMapImage);
 		
 	}
 
@@ -250,11 +255,21 @@ public class ControlPanel_Map extends JPanel {
 		chckbxStaticMapImage.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {
-				monitorPanel.switchStaticMapImage(chckbxStaticMapImage
+				monitorPanel.switchStaticMapImage(chckbxStaticMapImage.isSelected());
+			}
+		});
+		
+		
+		chckbxPlaceNames.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent e) {
+				monitorPanel.switchPlaceNameImage(chckbxPlaceNames
 						.isSelected());
 			}
 		});
 
+		
+		
 	}
 
 	void fillCountryNameToList() {
@@ -290,5 +305,4 @@ public class ControlPanel_Map extends JPanel {
 	public void setMonitorPanel(final MonitorPanel monitor) {
 		monitorPanel = monitor;
 	}
-
 }

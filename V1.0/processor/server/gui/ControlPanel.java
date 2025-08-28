@@ -10,6 +10,7 @@ import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
+import processor.SimulationProcessor;
 import processor.server.Server;
 
 public class ControlPanel extends JPanel {
@@ -20,16 +21,16 @@ public class ControlPanel extends JPanel {
 	boolean isDuringSimulation = false;
 	GUI gui;
 
-	public ControlPanel(final Server server, final GUI gui, final int topLeftX, final int topLeftY,
-			final Dimension displayPanelDimension) {
+	public ControlPanel(SimulationProcessor processor, final GUI gui, final int topLeftX, final int topLeftY,
+						final Dimension displayPanelDimension) {
 		this.gui = gui;
 		setBorder(null);
 		setBackground(Color.WHITE);
-		cpRes = new ControlPanel_Resource(server, this);
-		cpMiscConfig = new ControlPanel_MiscConfig(gui);
+		cpRes = new ControlPanel_Resource(processor, this);
+		cpMiscConfig = new ControlPanel_MiscConfig(processor.getSettings(), gui);
 		GuiUtil.setEnabledStatusOfComponents(cpMiscConfig, false);
-		cpMap = new ControlPanel_Map(gui);
-		cpRealtime = new ControlPanel_Realtime(server, this);
+		cpMap = new ControlPanel_Map(gui, processor.getSettings());
+		cpRealtime = new ControlPanel_Realtime(processor, this);
 		GuiUtil.setEnabledStatusOfComponents(cpRealtime, false);
 		addSubPanel(cpRes, cpRes.getPreferredSize(), displayPanelDimension, "Computing Resource", true);
 		addSubPanel(cpMap, cpMap.getPreferredSize(), displayPanelDimension, "Map", true);

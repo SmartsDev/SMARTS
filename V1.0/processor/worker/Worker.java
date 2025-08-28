@@ -2,56 +2,18 @@ package processor.worker;
 
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.UUID;
+import java.util.*;
 
 import common.Settings;
 import common.SysUtil;
 import processor.communication.IncomingConnectionBuilder;
 import processor.communication.MessageHandler;
 import processor.communication.MessageSender;
-import processor.communication.message.Message_SW_BlockLane;
-import processor.communication.message.Message_SW_ChangeSpeed;
-import processor.communication.message.Message_SW_KillWorker;
-import processor.communication.message.Message_SW_ServerBased_ShareTraffic;
-import processor.communication.message.Message_SW_ServerBased_Simulate;
-import processor.communication.message.Message_SW_Serverless_Pause;
-import processor.communication.message.Message_SW_Serverless_Resume;
-import processor.communication.message.Message_SW_Serverless_Start;
-import processor.communication.message.Message_SW_Serverless_Stop;
-import processor.communication.message.Message_SW_Setup;
-import processor.communication.message.Message_WS_Join;
-import processor.communication.message.Message_WS_TrafficReport;
-import processor.communication.message.Message_WS_ServerBased_SharedMyTrafficWithNeighbor;
-import processor.communication.message.Message_WS_Serverless_Complete;
-import processor.communication.message.Message_WS_SetupCreatingVehicles;
-import processor.communication.message.Message_WS_SetupDone;
-import processor.communication.message.Message_WW_Traffic;
-import processor.communication.message.SerializableDouble;
-import processor.communication.message.SerializableFrontVehicleOnBorder;
-import processor.communication.message.SerializableGridCell;
-import processor.communication.message.SerializableInt;
-import processor.communication.message.SerializableLaneIndex;
-import processor.communication.message.SerializableVehicle;
-import processor.communication.message.SerializableWorkerMetadata;
-import processor.communication.message.Serializable_GPS_Rectangle;
-import processor.server.DataOutputScope;
-import traffic.TrafficNetwork;
-import traffic.light.LightUtil;
+import processor.communication.message.*;
 import traffic.road.Edge;
 import traffic.road.GridCell;
-import traffic.road.Lane;
 import traffic.road.Node;
-import traffic.road.RoadUtil;
-import traffic.routing.RouteUtil;
-import traffic.vehicle.DriverProfile;
 import traffic.vehicle.Vehicle;
-import traffic.vehicle.VehicleType;
 
 /**
  * Worker receives simulation configuration from server and simulates traffic in
@@ -87,7 +49,8 @@ public class Worker implements MessageHandler, Runnable {
 	/**
 	 * Starts worker and tries to connect with server
 	 *
-	 * @param args server address (optional)
+	 * @param args
+	 *            server address (optional)
 	 */
 	public static void main(final String[] args) {
 
@@ -100,126 +63,93 @@ public class Worker implements MessageHandler, Runnable {
 
 	Worker me = this;
 	IncomingConnectionBuilder connectionBuilder;
-	TrafficNetwork trafficNetwork;
-	int step = 0;
-	double timeNow;
 	ArrayList<Fellow> fellowWorkers = new ArrayList<>();
 	String name = "";
 	MessageSender senderForServer;
 	String address = "localhost";
 	int listeningPort;
-	Workarea workarea;
-	ArrayList<Fellow> connectedFellows = new ArrayList<>();// Fellow workers that share at least one edge with this
-															// worker
+	ArrayList<Fellow> connectedFellows = new ArrayList<>();//Fellow workers that share at least one edge with this worker
 	ArrayList<Message_WW_Traffic> receivedTrafficCache = new ArrayList<>();
-	Simulation simulation;
-	boolean isDuringServerlessSim;// Once server-less simulation begins, this will true until the simulation ends
+	boolean isDuringServerlessSim;//Once server-less simulation begins, this will true until the simulation ends
 	boolean isPausingServerlessSim;
-	boolean isSimulatingOneStep;
-	ArrayList<Edge> pspBorderEdges = new ArrayList<>();// For PSP (server-less)
-	ArrayList<Edge> pspNonBorderEdges = new ArrayList<>();// For PSP (server-less)
-	Thread singleWorkerServerlessThread = new Thread();// Used when this worker is the only worker in server-less mode
-	int numVehicleCreatedSinceLastSetupProgressReport = 0;
-	int numLocalRandomPrivateVehicles = 0;
-	int numLocalRandomTrams = 0;
-	int numLocalRandomBuses = 0;
+	Thread singleWorkerServerlessThread = new Thread();//Used when this worker is the only worker in server-less mode
+	protected int numVehicleCreatedSinceLastSetupProgressReport = 0;
+	Settings settings;
+	Simulation simulation;
 
-	void changeLaneBlock(int laneIndex, boolean isBlocked) {
-		trafficNetwork.lanes.get(laneIndex).isBlocked = isBlocked;
+	public Worker(){
+		settings = new Settings();
 	}
-
+	
 	void buildThreadForSingleWorkerServerlessSimulation() {
 		singleWorkerServerlessThread = new Thread() {
 			public void run() {
-
-				while (step < Settings.maxNumSteps) {
-
+				while (simulation.getStep() < settings.maxNumSteps) {
 					if (!isDuringServerlessSim) {
 						break;
 					}
-
 					while (isPausingServerlessSim) {
 						try {
-							this.sleep(1);
+							sleep(1);
 						} catch (InterruptedException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
 					}
-
-					timeNow = step / Settings.numStepsPerSecond;
 					simulation.simulateOneStep(me, true, true, true);
-
 					sendTrafficReportInServerlessMode();
-
-					step++;
+					simulation.setStep(simulation.getStep() + 1);
 				}
 				// Finish simulation
-				senderForServer.send(new Message_WS_Serverless_Complete(name, step, trafficNetwork.vehicles.size()));
-
+				senderForServer.send(new Message_WS_Serverless_Complete(name, simulation.getStep(), simulation.getTrafficNetwork().getVehicleCount()));
 			}
 		};
 	}
 
-	void sendTrafficReportInServerlessMode() {
-		if ((step + 1) % Settings.trafficReportStepGapInServerlessMode == 0) {
-			senderForServer
-					.send(new Message_WS_TrafficReport(name, trafficNetwork.vehicles, trafficNetwork.lightCoordinator,
-							trafficNetwork.newVehiclesSinceLastReport, step, trafficNetwork.numInternalNonPublicVehicle,
-							trafficNetwork.numInternalTram, trafficNetwork.numInternalBus));
-			trafficNetwork.clearReportedData();
+	public void sendTrafficReportInServerlessMode() {
+		if ((simulation.getStep() + 1) % settings.trafficReportStepGapInServerlessMode == 0) {
+			senderForServer.send(new Message_WS_TrafficReport(settings, name, simulation.getStep(), simulation.getTrafficNetwork(), simulation.getLaneChanges()));
+			simulation.clearReportedTrafficData();
 		}
-	}
-
-	Vehicle createReceivedVehicle(final SerializableVehicle serializableVehicle) {
-		final Vehicle vehicle = new Vehicle();
-		vehicle.type = VehicleType.getVehicleTypeFromName(serializableVehicle.type);
-		vehicle.length = vehicle.type.length;
-		vehicle.routeLegs = RouteUtil.parseReceivedRoute(serializableVehicle.routeLegs, trafficNetwork.edges);
-		vehicle.indexLegOnRoute = serializableVehicle.indexRouteLeg;
-		vehicle.lane = trafficNetwork.lanes.get(serializableVehicle.laneIndex);
-		vehicle.headPosition = serializableVehicle.headPosition;
-		vehicle.speed = serializableVehicle.speed;
-		vehicle.timeRouteStart = serializableVehicle.timeRouteStart;
-		vehicle.id = serializableVehicle.id;
-		vehicle.isExternal = serializableVehicle.isExternal;
-		vehicle.isForeground = serializableVehicle.isForeground;
-		vehicle.idLightGroupPassed = serializableVehicle.idLightGroupPassed;
-		vehicle.driverProfile = DriverProfile.valueOf(serializableVehicle.driverProfile);
-		return vehicle;
 	}
 
 	void createVehiclesFromFellow(final Message_WW_Traffic messageToProcess) {
 		for (final SerializableVehicle serializableVehicle : messageToProcess.vehiclesEnteringReceiver) {
-			final Vehicle vehicle = createReceivedVehicle(serializableVehicle);
-			trafficNetwork.addOneTransferredVehicle(vehicle, timeNow);
+			final Vehicle vehicle = serializableVehicle.createVehicle(simulation.getTrafficNetwork());
+			simulation.addTransferredVehicle(vehicle);
 		}
 	}
 
 	/**
-	 * Divide edges overlapping with the responsible area of this worker into two
-	 * sets based on their closeness to the border of the responsible area.
+	 * Divide edges overlapping with the responsible area of this worker into
+	 * two sets based on their closeness to the border of the responsible area.
 	 */
-	void divideLaneSetForServerlessSim() {
+	Map<String, List<Edge>> divideLaneSetForSim() {
+		Map<String, List<Edge>> setMap = new HashMap<>();
+		List<Edge> pspBorderEdges = new ArrayList<>();// For PSP (server-less)
+		List<Edge> pspNonBorderEdges = new ArrayList<>();
 		final HashSet<Edge> edgeSet = new HashSet<>();
 		for (final Fellow fellow : fellowWorkers) {
 			for (final Edge e : fellow.inwardEdgesAcrossBorder) {
 				edgeSet.add(e);
-				edgeSet.addAll(findInwardEdgesWithinCertainDistance(e.startNode, 0, 56.0 / Settings.numStepsPerSecond,
+				edgeSet.addAll(findInwardEdgesWithinCertainDistance(e.startNode, 0, 28.0 / settings.numStepsPerSecond,
 						edgeSet));
 			}
 		}
 		pspBorderEdges.addAll(edgeSet);
-		for (final Edge e : trafficNetwork.edges) {
+		for (final Edge e : simulation.getTrafficNetwork().edges) {
 			if (!edgeSet.contains(e)) {
 				pspNonBorderEdges.add(e);
 			}
 		}
+		setMap.put("Border", pspBorderEdges);
+		setMap.put("NonBorder", pspNonBorderEdges);
+		return setMap;
 	}
 
 	/**
-	 * Find the fellow workers that need to communicate with this worker. Each of
-	 * these fellow workers shares at least one edge with this worker.
+	 * Find the fellow workers that need to communicate with this worker. Each
+	 * of these fellow workers shares at least one edge with this worker.
 	 */
 	void findConnectedFellows() {
 		connectedFellows.clear();
@@ -254,27 +184,21 @@ public class Worker implements MessageHandler, Runnable {
 				count++;
 			}
 		}
-
-		if (count == connectedFellows.size()) {
-			return true;
-		} else {
-			return false;
-		}
+		return count == connectedFellows.size();
 
 	}
 
 	/**
-	 * Create a new worker. Set the worker's name, address and listening port. The
-	 * worker comes with a new receiver for receiving messages, e.g., connection
-	 * requests, from other entities such as workers.
+	 * Create a new worker. Set the worker's name, address and listening port.
+	 * The worker comes with a new receiver for receiving messages, e.g.,
+	 * connection requests, from other entities such as workers.
 	 */
 	void join() {
 		// Get IP address
-		address = SysUtil.getMyIpV4Addres();
-
+		address = SysUtil.getMyIpV4Addres(settings.isSharedJVM);
 		// Find an available port
-		listeningPort = Settings.serverListeningPortForWorkers + 1
-				+ (new Random()).nextInt(65535 - Settings.serverListeningPortForWorkers);
+		listeningPort = settings.serverListeningPortForWorkers + 1
+				+ (new Random()).nextInt(65535 - settings.serverListeningPortForWorkers);
 		while (true) {
 			try {
 				final ServerSocket ss = new ServerSocket(listeningPort);
@@ -285,16 +209,10 @@ public class Worker implements MessageHandler, Runnable {
 				continue;
 			}
 		}
-
 		connectionBuilder = new IncomingConnectionBuilder(listeningPort, this);
 		connectionBuilder.start();
-
-		senderForServer = new MessageSender(Settings.serverAddress, Settings.serverListeningPortForWorkers);
-
+		senderForServer = new MessageSender(settings.serverAddress, settings.serverListeningPortForWorkers);
 		name = SysUtil.getRandomID(4);
-
-		workarea = new Workarea(name, null);
-
 		senderForServer.send(new Message_WS_Join(name, address, listeningPort));
 	}
 
@@ -303,19 +221,18 @@ public class Worker implements MessageHandler, Runnable {
 		processCachedReceivedTraffic();
 
 		if (isAllFellowsAtState(FellowState.SHARED)) {
-			if (Settings.isServerBased) {
+			if (settings.isServerBased) {
 				senderForServer.send(new Message_WS_ServerBased_SharedMyTrafficWithNeighbor(name));
 			} else if (isDuringServerlessSim) {
 				sendTrafficReportInServerlessMode();
 
 				// Proceed to next step or finish
-				if (step >= Settings.maxNumSteps) {
+				if (simulation.getStep() >= settings.maxNumSteps) {
 					senderForServer
-							.send(new Message_WS_Serverless_Complete(name, step, trafficNetwork.vehicles.size()));
+							.send(new Message_WS_Serverless_Complete(name, simulation.getStep(), simulation.getTrafficNetwork().getVehicleCount()));
 					resetTraffic();
 				} else if (!isPausingServerlessSim) {
-					step++;
-					timeNow = step / Settings.numStepsPerSecond;
+					simulation.setStep(simulation.getStep() + 1);
 					simulation.simulateOneStep(this, true, true, true);
 					proceedBasedOnSyncMethod();
 				}
@@ -328,30 +245,18 @@ public class Worker implements MessageHandler, Runnable {
 
 		while (iMessage.hasNext()) {
 			final Message_WW_Traffic message = iMessage.next();
-			if (message.stepAtSender == step) {
+			if (message.stepAtSender == simulation.getStep()) {
 				processReceivedTraffic(message);
 				iMessage.remove();
 			}
 		}
 	}
 
-	ArrayList<GridCell> processReceivedGridCells(final ArrayList<SerializableGridCell> received,
-			final GridCell[][] grid) {
-		final ArrayList<GridCell> cellsInWorkarea = new ArrayList<>();
-		for (final SerializableGridCell receivedCell : received) {
-			cellsInWorkarea.add(grid[receivedCell.row][receivedCell.column]);
-		}
-		return cellsInWorkarea;
-	}
-
 	void processReceivedMetadataOfWorkers(final ArrayList<SerializableWorkerMetadata> metadataWorkers) {
 		// Set work area of all workers
 		for (final SerializableWorkerMetadata metadata : metadataWorkers) {
-			final ArrayList<GridCell> cellsInWorkarea = processReceivedGridCells(metadata.gridCells,
-					trafficNetwork.grid);
-			if (metadata.name.equals(name)) {
-				workarea.setWorkCells(cellsInWorkarea);
-			} else {
+			final ArrayList<GridCell> cellsInWorkarea = metadata.processReceivedGridCells(simulation.getTrafficNetwork().grid);
+			if (!metadata.name.equals(name)) {
 				final Fellow fellow = new Fellow(metadata.name, metadata.address, metadata.port, cellsInWorkarea);
 				fellowWorkers.add(fellow);
 			}
@@ -359,8 +264,8 @@ public class Worker implements MessageHandler, Runnable {
 
 		// Identify edges shared with fellow workers
 		for (final Fellow fellowWorker : fellowWorkers) {
-			fellowWorker.getEdgesFromAnotherArea(workarea);
-			fellowWorker.getEdgesToAnotherArea(workarea);
+			fellowWorker.getEdgesFromAnotherArea(simulation.getTrafficNetwork().workarea);
+			fellowWorker.getEdgesToAnotherArea(simulation.getTrafficNetwork().workarea);
 		}
 
 		// Identify fellow workers that share edges with this worker
@@ -371,179 +276,36 @@ public class Worker implements MessageHandler, Runnable {
 		for (final Fellow fellowWorker : connectedFellows) {
 			fellowWorker.prepareCommunication();
 		}
+		simulation.setPspEdges(divideLaneSetForSim());
 	}
 
 	@Override
 	public synchronized void processReceivedMsg(final Object message) {
 		if (message instanceof Message_SW_Setup) {
-			final Message_SW_Setup messageToProcess = (Message_SW_Setup) message;
-			processReceivedSimulationConfiguration(messageToProcess);
-			trafficNetwork.buildEnvironment(workarea.workCells, workarea.workerName, step);
-			resetTraffic();
-			isSimulatingOneStep = false;
-
-			// Pause a bit so other workers can reset before starting simulation
-			try {
-				Thread.sleep(500);
-			} catch (final InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-
-			if ((messageToProcess.indexNodesToAddLight.size() > 0)
-					|| (messageToProcess.indexNodesToRemoveLight.size() > 0)) {
-				trafficNetwork.lightCoordinator.init(trafficNetwork.nodes, messageToProcess.indexNodesToAddLight,
-						messageToProcess.indexNodesToRemoveLight, workarea);
-			}
-
-			// Reset fellow state
-			for (final Fellow connectedFellow : connectedFellows) {
-				connectedFellow.state = FellowState.SHARED;
-			}
-
-			// Create vehicles
-			numVehicleCreatedSinceLastSetupProgressReport = 0;
-			final TimerTask progressTimerTask = new TimerTask() {
-				@Override
-				public void run() {
-					senderForServer.send(new Message_WS_SetupCreatingVehicles(
-							trafficNetwork.vehicles.size() - numVehicleCreatedSinceLastSetupProgressReport));
-					numVehicleCreatedSinceLastSetupProgressReport = trafficNetwork.vehicles.size();
-				}
-			};
-			final Timer progressTimer = new Timer();
-			final Random random = new Random();
-			if (Settings.isVisualize) {
-				progressTimer.scheduleAtFixedRate(progressTimerTask, 500, random.nextInt(1000) + 1);
-			}
-
-			trafficNetwork.createExternalVehicles(messageToProcess.externalRoutes, timeNow);
-
-			trafficNetwork.createInternalVehicles(numLocalRandomPrivateVehicles, numLocalRandomTrams,
-					numLocalRandomBuses, true, true, true, timeNow);
-
-			progressTimerTask.cancel();
-			progressTimer.cancel();
-
-			// Let server know that setup is done
-			senderForServer.send(new Message_WS_SetupDone(name, connectedFellows.size()));
+			onSWSetupMessage((Message_SW_Setup) message);
 		} else if (message instanceof Message_SW_ServerBased_ShareTraffic) {
-			final Message_SW_ServerBased_ShareTraffic messageToProcess = (Message_SW_ServerBased_ShareTraffic) message;
-
-			step = messageToProcess.currentStep;
-			timeNow = step / Settings.numStepsPerSecond;
-			transferVehicleDataToFellow();
-			proceedBasedOnSyncMethod();
+			onSWServerBasedShareTrafficMsg((Message_SW_ServerBased_ShareTraffic) message);
 		} else if (message instanceof Message_WW_Traffic) {
-			final Message_WW_Traffic messageToProcess = (Message_WW_Traffic) message;
-
-			receivedTrafficCache.add(messageToProcess);
-			proceedBasedOnSyncMethod();
+			onWWTrafficMsg((Message_WW_Traffic) message);
 		} else if (message instanceof Message_SW_ServerBased_Simulate) {
-			final Message_SW_ServerBased_Simulate messageToProcess = (Message_SW_ServerBased_Simulate) message;
-
-			simulation.simulateOneStep(this, messageToProcess.isNewNonPubVehiclesAllowed,
-					messageToProcess.isNewTramsAllowed, messageToProcess.isNewBusesAllowed);
-			senderForServer
-					.send(new Message_WS_TrafficReport(name, trafficNetwork.vehicles, trafficNetwork.lightCoordinator,
-							trafficNetwork.newVehiclesSinceLastReport, step, trafficNetwork.numInternalNonPublicVehicle,
-							trafficNetwork.numInternalTram, trafficNetwork.numInternalBus));
-			trafficNetwork.clearReportedData();
+			onSWServerBasedSimulate((Message_SW_ServerBased_Simulate) message);
 		} else if (message instanceof Message_SW_Serverless_Start) {
-			final Message_SW_Serverless_Start messageToProcess = (Message_SW_Serverless_Start) message;
-			step = messageToProcess.startStep;
-			isDuringServerlessSim = true;
-			isPausingServerlessSim = false;
-
-			if (connectedFellows.size() == 0) {
-				buildThreadForSingleWorkerServerlessSimulation();
-				singleWorkerServerlessThread.start();
-			} else {
-				timeNow = step / Settings.numStepsPerSecond;
-				simulation.simulateOneStep(this, true, true, true);
-				proceedBasedOnSyncMethod();
-			}
+			onSWServerlessStart((Message_SW_Serverless_Start) message);
 		} else if (message instanceof Message_SW_KillWorker) {
-			final Message_SW_KillWorker messageToProcess = (Message_SW_KillWorker) message;
-			// Quit depending on how the worker was started
-			if (messageToProcess.isSharedJVM) {
-				final ConnectionBuilderTerminationTask task = new ConnectionBuilderTerminationTask();
-				new Timer().schedule(task, 1);
-			} else {
-				System.exit(0);
-			}
+			onSWKillWorker((Message_SW_KillWorker) message);
 		} else if (message instanceof Message_SW_Serverless_Stop) {
-			isDuringServerlessSim = false;
-			isPausingServerlessSim = false;
-			singleWorkerServerlessThread.stop();
-			resetTraffic();
+			onSWServerlessStop((Message_SW_Serverless_Stop) message);
 		} else if (message instanceof Message_SW_Serverless_Pause) {
-			isPausingServerlessSim = true;
+			onSWServerlessPause((Message_SW_Serverless_Pause) message);
 		} else if (message instanceof Message_SW_Serverless_Resume) {
-			isPausingServerlessSim = false;
-			// When it is not single worker environment, explicitly resume the routine tasks
-			if (connectedFellows.size() > 0) {
-				proceedBasedOnSyncMethod();
-			}
+			onSWServerlessResume((Message_SW_Serverless_Resume) message);
 		} else if (message instanceof Message_SW_ChangeSpeed) {
-			final Message_SW_ChangeSpeed messageToProcess = (Message_SW_ChangeSpeed) message;
-			Settings.pauseTimeBetweenStepsInMilliseconds = messageToProcess.pauseTimeBetweenStepsInMilliseconds;
+			onSWChangeSpeed((Message_SW_ChangeSpeed) message);
 		} else if (message instanceof Message_SW_BlockLane) {
-			final Message_SW_BlockLane messageToProcess = (Message_SW_BlockLane) message;
-			changeLaneBlock(messageToProcess.laneIndex, messageToProcess.isBlocked);
+			onSWBlockLane((Message_SW_BlockLane) message);
+		} else if (message instanceof Message_SW_ChangeLaneDirection) {
+			onSWChangeLaneDirection((Message_SW_ChangeLaneDirection) message);
 		}
-	}
-
-	void processReceivedSimulationConfiguration(final Message_SW_Setup received) {
-
-		Settings.numWorkers = received.numWorkers;
-		Settings.maxNumSteps = received.maxNumSteps;
-		Settings.numStepsPerSecond = received.numStepsPerSecond;
-		step = received.startStep;
-		timeNow = step / Settings.numStepsPerSecond;
-		Settings.trafficReportStepGapInServerlessMode = received.workerToServerReportStepGapInServerlessMode;
-		Settings.periodOfTrafficWaitForTramAtStop = received.periodOfTrafficWaitForTramAtStop;
-		Settings.driverProfileDistribution = setDriverProfileDistribution(received.driverProfileDistribution);
-		Settings.lookAheadDistance = received.lookAheadDistance;
-		Settings.trafficLightTiming = LightUtil.getLightTypeFromString(received.trafficLightTiming);
-		Settings.isVisualize = received.isVisualize;
-		numLocalRandomPrivateVehicles = received.numRandomPrivateVehicles;
-		numLocalRandomTrams = received.numRandomTrams;
-		numLocalRandomBuses = received.numRandomBuses;
-		Settings.isServerBased = received.isServerBased;
-		Settings.routingAlgorithm = RouteUtil.getRoutingAlgorithmFromString(received.routingAlgorithm);
-		Settings.isAllowPriorityVehicleUseTramTrack = received.isAllowPriorityVehicleUseTramTrack;
-		Settings.outputRouteScope = DataOutputScope.valueOf(received.outputRouteScope);
-		Settings.outputTrajectoryScope = DataOutputScope.valueOf(received.outputTrajectoryScope);
-		Settings.outputTravelTimeScope = DataOutputScope.valueOf(received.outputTravelTimeScope);
-		Settings.isOutputSimulationLog = received.isOutputSimulationLog;
-		Settings.listRouteSourceWindowForInternalVehicle = setRouteSourceDestinationWindow(
-				received.listRouteSourceWindowForInternalVehicle);
-		Settings.listRouteDestinationWindowForInternalVehicle = setRouteSourceDestinationWindow(
-				received.listRouteDestinationWindowForInternalVehicle);
-		Settings.listRouteSourceDestinationWindowForInternalVehicle = setRouteSourceDestinationWindow(
-				received.listRouteSourceDestinationWindowForInternalVehicle);
-		Settings.isAllowReroute = received.isAllowReroute;
-		Settings.isAllowTramRule = received.isAllowTramRule;
-		Settings.isDriveOnLeft = received.isDriveOnLeft;
-		Settings.isUseAnyLaneToTurn=received.isUseAnyLaneToTurn;
-
-		if (received.isNewEnvironment) {
-			if (received.roadGraph.equals("builtin")) {
-				Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
-			} else {
-				Settings.roadGraph = SysUtil.decompressString(received.roadGraph);
-			}
-			trafficNetwork = new TrafficNetwork();
-			processReceivedMetadataOfWorkers(received.metadataWorkers);
-
-			simulation = new Simulation(trafficNetwork, connectedFellows, workarea);
-			divideLaneSetForServerlessSim();
-		}
-
-		// Reset lights
-		trafficNetwork.lightCoordinator.init(trafficNetwork.nodes, new ArrayList<SerializableInt>(),
-				new ArrayList<SerializableInt>(), workarea);
 	}
 
 	void processReceivedTraffic(final Message_WW_Traffic messageToProcess) {
@@ -553,25 +315,13 @@ public class Worker implements MessageHandler, Runnable {
 	}
 
 	void resetTraffic() {
-
 		for (final Fellow fellow : fellowWorkers) {
 			fellow.vehiclesToCreateAtBorder.clear();
 			fellow.state = FellowState.SHARED;
 		}
-
 		receivedTrafficCache.clear();
-		for (final Edge edge : pspBorderEdges) {
-			for (final Lane lane : edge.lanes) {
-				lane.vehicles.clear();
-			}
-		}
-		for (final Edge edge : pspNonBorderEdges) {
-			for (final Lane lane : edge.lanes) {
-				lane.vehicles.clear();
-			}
-		}
+		simulation.resetTraffic();
 
-		trafficNetwork.resetTraffic();
 	}
 
 	@Override
@@ -581,37 +331,15 @@ public class Worker implements MessageHandler, Runnable {
 	}
 
 	/**
-	 * Set the percentage of drivers with different profiles, from highly aggressive
-	 * to highly polite.
-	 */
-	ArrayList<Double> setDriverProfileDistribution(final ArrayList<SerializableDouble> sList) {
-		final ArrayList<Double> list = new ArrayList<>();
-		for (final SerializableDouble sd : sList) {
-			list.add(sd.value);
-		}
-		return list;
-	}
-
-	ArrayList<double[]> setRouteSourceDestinationWindow(final ArrayList<Serializable_GPS_Rectangle> sList) {
-		final ArrayList<double[]> list = new ArrayList<>();
-		for (final Serializable_GPS_Rectangle sgr : sList) {
-			list.add(new double[] { sgr.minLon, sgr.maxLat, sgr.maxLon, sgr.minLat });
-		}
-		return list;
-	}
-
-	/**
 	 * Send vehicle position on cross-border edges to fellow workers.
 	 */
 	void transferVehicleDataToFellow() {
 		for (final Fellow fellowWorker : connectedFellows) {
-			fellowWorker.send(new Message_WW_Traffic(name, fellowWorker, step));
+			fellowWorker.send(new Message_WW_Traffic(name, fellowWorker, simulation.getStep()));
 			updateFellowState(fellowWorker.name, FellowState.SHARING_DATA_SENT);
 			fellowWorker.vehiclesToCreateAtBorder.clear();
 		}
 	}
-
-	
 
 	void updateFellowState(final String workerName, final FellowState newState) {
 		for (final Fellow fellow : connectedFellows) {
@@ -632,11 +360,124 @@ public class Worker implements MessageHandler, Runnable {
 
 	void updateTrafficAtOutgoingEdgesToFellows(final Message_WW_Traffic received) {
 		for (final SerializableFrontVehicleOnBorder info : received.lastVehiclesLeftReceiver) {
-			final int laneIndex = info.laneIndex;
-			final double position = info.endPosition;
-			final double speed = info.speed;
-			trafficNetwork.lanes.get(laneIndex).endPositionOfLatestVehicleLeftThisWorker = position;
-			trafficNetwork.lanes.get(laneIndex).speedOfLatestVehicleLeftThisWorker = speed;
+			simulation.updateTrafficAtOutgoingEdgesToFellows(info.laneIndex, info.endPosition, info.speed);
 		}
 	}
+
+	public void onSWSetupMessage(Message_SW_Setup msg){
+		msg.setupFromMessage(settings);
+		if(settings.isNewEnvironment) {
+			simulation = new Simulation(settings, msg.startStep, msg.roadGraph, msg.numRandomPrivateVehicles,
+					msg.numRandomTrams, msg.numRandomBuses, name, msg.metadataWorkers, msg.lightNodes);
+			processReceivedMetadataOfWorkers(msg.metadataWorkers);
+		}else{
+			simulation.resetSimulation(settings, msg.startStep, msg.numRandomPrivateVehicles,
+					msg.numRandomTrams, msg.numRandomBuses, msg.lightNodes);
+		}
+		resetTraffic();
+		//Pause a bit so other workers can reset before starting simulation
+		try {
+			Thread.sleep(500);
+		} catch (final InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		// Reset fellow state
+		for (final Fellow connectedFellow : connectedFellows) {
+			connectedFellow.state = FellowState.SHARED;
+		}
+		// Create vehicles
+		numVehicleCreatedSinceLastSetupProgressReport = 0;
+		final TimerTask progressTimerTask = new TimerTask() {
+			@Override
+			public void run() {
+				senderForServer.send(new Message_WS_SetupCreatingVehicles(
+						simulation.getTrafficNetwork().getVehicleCount() - numVehicleCreatedSinceLastSetupProgressReport));
+				numVehicleCreatedSinceLastSetupProgressReport = simulation.getTrafficNetwork().getVehicleCount();
+			}
+		};
+		final Timer progressTimer = new Timer();
+		final Random random = new Random();
+		if (settings.isVisualize) {
+			progressTimer.scheduleAtFixedRate(progressTimerTask, 500, random.nextInt(1000) + 1);
+		}
+		simulation.createVehicles(msg.externalRoutes);
+		progressTimerTask.cancel();
+		progressTimer.cancel();
+		// Let server know that setup is done
+		senderForServer.send(new Message_WS_SetupDone(name, connectedFellows.size()));
+	}
+
+	private void onSWServerBasedShareTrafficMsg(Message_SW_ServerBased_ShareTraffic msg){
+		simulation.setStep(msg.currentStep);
+		transferVehicleDataToFellow();
+		proceedBasedOnSyncMethod();
+	}
+
+	private void onWWTrafficMsg(Message_WW_Traffic msg){
+		receivedTrafficCache.add(msg);
+		proceedBasedOnSyncMethod();
+	}
+
+	public void onSWServerBasedSimulate(Message_SW_ServerBased_Simulate msg){
+		simulation.simulateOneStep(this, msg.isNewNonPubVehiclesAllowed, msg.isNewTramsAllowed, msg.isNewBusesAllowed);
+		senderForServer.send(new Message_WS_TrafficReport(settings, name, simulation.getStep(), simulation.getTrafficNetwork(), simulation.getLaneChanges()));
+		simulation.clearReportedTrafficData();
+	}
+
+	private void onSWServerlessStart(Message_SW_Serverless_Start msg){
+		simulation.setStep(msg.startStep);
+		isDuringServerlessSim = true;
+		isPausingServerlessSim = false;
+
+		if (connectedFellows.size() == 0) {
+			buildThreadForSingleWorkerServerlessSimulation();
+			singleWorkerServerlessThread.start();
+		} else {
+			simulation.simulateOneStep(this, true, true, true);
+			proceedBasedOnSyncMethod();
+		}
+	}
+
+	private void onSWKillWorker(Message_SW_KillWorker msg){
+		// Quit depending on how the worker was started
+		if (msg.isSharedJVM) {
+			final ConnectionBuilderTerminationTask task = new ConnectionBuilderTerminationTask();
+			new Timer().schedule(task, 1);
+		} else {
+			System.exit(0);
+		}
+	}
+
+	private void onSWServerlessStop(Message_SW_Serverless_Stop msg){
+		isDuringServerlessSim = false;
+		isPausingServerlessSim = false;
+		singleWorkerServerlessThread.stop();
+		resetTraffic();
+	}
+
+	private void onSWServerlessPause(Message_SW_Serverless_Pause msg){
+		isPausingServerlessSim = true;
+	}
+
+	private void onSWServerlessResume(Message_SW_Serverless_Resume msg){
+		isPausingServerlessSim = false;
+		// When it is not single worker environment, explicitly resume the routine tasks
+		if (connectedFellows.size() > 0) {
+			proceedBasedOnSyncMethod();
+		}
+	}
+
+	private void onSWChangeSpeed(Message_SW_ChangeSpeed msg){
+		settings.pauseTimeBetweenStepsInMilliseconds = msg.pauseTimeBetweenStepsInMilliseconds;
+	}
+
+	private void onSWBlockLane(Message_SW_BlockLane msg){
+		simulation.changeLaneBlock(msg.laneIndex, msg.isBlocked);
+	}
+
+	private void onSWChangeLaneDirection(Message_SW_ChangeLaneDirection msg){
+		simulation.changeLaneDirection(msg.edgeIndex);
+	}
+
 }

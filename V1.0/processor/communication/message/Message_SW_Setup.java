@@ -1,11 +1,14 @@
 package processor.communication.message;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import common.Settings;
 import processor.server.WorkerMeta;
+import traffic.light.LightUtil;
 import traffic.road.Edge;
 import traffic.road.Node;
+import traffic.routing.RouteUtil;
 
 /**
  * Server-to-worker message containing the simulation configuration. Worker will
@@ -34,92 +37,76 @@ public class Message_SW_Setup {
 	public boolean isServerBased;
 	public String roadGraph;
 	public String routingAlgorithm;
-	/**
-	 * Index of nodes where traffic light is added by user
-	 */
-	public ArrayList<SerializableInt> indexNodesToAddLight = new ArrayList<>();
-	/**
-	 * Index of nodes where traffic light is removed by user
-	 */
-	public ArrayList<SerializableInt> indexNodesToRemoveLight = new ArrayList<>();
+	public ArrayList<SerializableInt> lightNodes = new ArrayList<>();
 	public boolean isAllowPriorityVehicleUseTramTrack;
-	public String outputTrajectoryScope;
-	public String outputRouteScope;
-	public String outputTravelTimeScope;
-	public boolean isOutputSimulationLog;
+	public boolean isOutputForegroundTrajectory = false;
+	public boolean isOutputInternalBackgroundRoutePlan = false;
 	public ArrayList<Serializable_GPS_Rectangle> listRouteSourceWindowForInternalVehicle = new ArrayList<>();
 	public ArrayList<Serializable_GPS_Rectangle> listRouteDestinationWindowForInternalVehicle = new ArrayList<>();
 	public ArrayList<Serializable_GPS_Rectangle> listRouteSourceDestinationWindowForInternalVehicle = new ArrayList<>();
-	public boolean isAllowReroute;
-	public boolean isAllowTramRule;
+	public boolean isAllowReroute = false;
+	public boolean isAllowTramRule = true;
 	public boolean isDriveOnLeft;
-	public boolean isUseAnyLaneToTurn;
-	
+
 	public Message_SW_Setup() {
 
 	}
 
-	public Message_SW_Setup(final ArrayList<WorkerMeta> workers,
-			final WorkerMeta workerToReceiveMessage,
-			final ArrayList<Edge> edges, final int step,
-			final ArrayList<Node> nodesToAddLight,
-			final ArrayList<Node> nodesToRemoveLight,
-			final String compressedRoadGraph) {
-		isNewEnvironment = Settings.isNewEnvironment;
-		numWorkers = Settings.numWorkers;
+	public Message_SW_Setup(Settings settings,
+							List<WorkerMeta> workers,
+							WorkerMeta workerToReceiveMessage,
+							List<Edge> edges,
+							int step) {
+		isNewEnvironment = settings.isNewEnvironment;
+		numWorkers = settings.numWorkers;
 		startStep = step;
-		maxNumSteps = Settings.maxNumSteps;
-		numStepsPerSecond = Settings.numStepsPerSecond;
-		workerToServerReportStepGapInServerlessMode = Settings.trafficReportStepGapInServerlessMode;
-		periodOfTrafficWaitForTramAtStop = Settings.periodOfTrafficWaitForTramAtStop;
-		driverProfileDistribution = getDriverProfilePercentage(Settings.driverProfileDistribution);
-		lookAheadDistance = Settings.lookAheadDistance;
-		trafficLightTiming = Settings.trafficLightTiming.name();
-		isVisualize = Settings.isVisualize;
+		maxNumSteps = settings.maxNumSteps;
+		numStepsPerSecond = settings.numStepsPerSecond;
+		workerToServerReportStepGapInServerlessMode = settings.trafficReportStepGapInServerlessMode;
+		periodOfTrafficWaitForTramAtStop = settings.periodOfTrafficWaitForTramAtStop;
+		driverProfileDistribution = getDriverProfilePercentage(settings.driverProfileDistribution);
+		lookAheadDistance = settings.lookAheadDistance;
+		trafficLightTiming = settings.trafficLightTiming.name();
+		isVisualize = settings.isVisualize;
 		metadataWorkers = appendMetadataOfWorkers(workers);
 		numRandomPrivateVehicles = workerToReceiveMessage.numRandomPrivateVehicles;
 		numRandomTrams = workerToReceiveMessage.numRandomTrams;
 		numRandomBuses = workerToReceiveMessage.numRandomBuses;
 		externalRoutes = workerToReceiveMessage.externalRoutes;
-		isServerBased = Settings.isServerBased;
-		if (Settings.isNewEnvironment) {
-			if (Settings.isBuiltinRoadGraph) {
+		isServerBased = settings.isServerBased;
+		if (settings.isNewEnvironment) {
+			if (settings.isBuiltinRoadGraph) {
 				roadGraph = "builtin";
 			} else {
-				roadGraph = compressedRoadGraph;
+				roadGraph = settings.roadGraph;
 			}
 		} else {
 			roadGraph = "";
 		}
-		routingAlgorithm = Settings.routingAlgorithm.name();
-		isAllowPriorityVehicleUseTramTrack = Settings.isAllowPriorityVehicleUseTramTrack;
-		indexNodesToAddLight = getLightNodeIndex(nodesToAddLight);
-		indexNodesToRemoveLight = getLightNodeIndex(nodesToRemoveLight);
-		outputTrajectoryScope = Settings.outputTrajectoryScope.name();
-		outputRouteScope = Settings.outputRouteScope.name();
-		outputTravelTimeScope = Settings.outputTravelTimeScope.name();
-		isOutputSimulationLog = Settings.isOutputSimulationLog;
-		listRouteSourceWindowForInternalVehicle = getListRouteWindow(Settings.listRouteSourceWindowForInternalVehicle);
-		listRouteDestinationWindowForInternalVehicle = getListRouteWindow(Settings.listRouteDestinationWindowForInternalVehicle);
-		listRouteSourceDestinationWindowForInternalVehicle = getListRouteWindow(Settings.listRouteSourceDestinationWindowForInternalVehicle);
-		isAllowReroute = Settings.isAllowReroute;
-		isAllowTramRule = Settings.isAllowTramRule;
-		isDriveOnLeft = Settings.isDriveOnLeft;
-		isUseAnyLaneToTurn=Settings.isUseAnyLaneToTurn;
+		routingAlgorithm = settings.routingAlgorithm.name();
+		isAllowPriorityVehicleUseTramTrack = settings.isAllowPriorityVehicleUseTramTrack;
+		this.lightNodes = getLightNodeIndex(workerToReceiveMessage.lightNodes);
+		isOutputForegroundTrajectory = settings.isOutputTrajectory;
+		isOutputInternalBackgroundRoutePlan = settings.isOutputInitialRoutes;
+		listRouteSourceWindowForInternalVehicle = getListRouteWindow(settings.listRouteSourceWindowForInternalVehicle);
+		listRouteDestinationWindowForInternalVehicle = getListRouteWindow(
+				settings.listRouteDestinationWindowForInternalVehicle);
+		listRouteSourceDestinationWindowForInternalVehicle = getListRouteWindow(
+				settings.listRouteSourceDestinationWindowForInternalVehicle);
+		isAllowReroute = settings.isAllowReroute;
+		isAllowTramRule = settings.isAllowTramRule;
+		isDriveOnLeft = settings.isDriveOnLeft;
 	}
 
-	ArrayList<SerializableWorkerMetadata> appendMetadataOfWorkers(
-			final ArrayList<WorkerMeta> workers) {
+	ArrayList<SerializableWorkerMetadata> appendMetadataOfWorkers(List<WorkerMeta> workers) {
 		final ArrayList<SerializableWorkerMetadata> listSerializableWorkerMetadata = new ArrayList<>();
 		for (final WorkerMeta worker : workers) {
-			listSerializableWorkerMetadata.add(new SerializableWorkerMetadata(
-					worker));
+			listSerializableWorkerMetadata.add(new SerializableWorkerMetadata(worker));
 		}
 		return listSerializableWorkerMetadata;
 	}
 
-	ArrayList<SerializableDouble> getDriverProfilePercentage(
-			final ArrayList<Double> percentages) {
+	ArrayList<SerializableDouble> getDriverProfilePercentage(List<Double> percentages) {
 		final ArrayList<SerializableDouble> list = new ArrayList<>();
 		for (final Double percentage : percentages) {
 			list.add(new SerializableDouble(percentage));
@@ -127,7 +114,7 @@ public class Message_SW_Setup {
 		return list;
 	}
 
-	ArrayList<SerializableInt> getLightNodeIndex(final ArrayList<Node> nodes) {
+	ArrayList<SerializableInt> getLightNodeIndex(List<Node> nodes) {
 		final ArrayList<SerializableInt> list = new ArrayList<>();
 		for (final Node node : nodes) {
 			list.add(new SerializableInt(node.index));
@@ -135,14 +122,55 @@ public class Message_SW_Setup {
 		return list;
 	}
 
-	ArrayList<Serializable_GPS_Rectangle> getListRouteWindow(
-			final ArrayList<double[]> windows) {
+	ArrayList<Serializable_GPS_Rectangle> getListRouteWindow(List<double[]> windows) {
 		final ArrayList<Serializable_GPS_Rectangle> list = new ArrayList<>();
 		for (final double[] window : windows) {
-			list.add(new Serializable_GPS_Rectangle(window[0], window[1],
-					window[2], window[3]));
+			list.add(new Serializable_GPS_Rectangle(window[0], window[1], window[2], window[3]));
 		}
 		return list;
 	}
 
+	public void setupFromMessage(Settings settings){
+		settings.isNewEnvironment = isNewEnvironment;
+		settings.numWorkers = numWorkers;
+		settings.maxNumSteps = maxNumSteps;
+		settings.numStepsPerSecond = numStepsPerSecond;
+		settings.trafficReportStepGapInServerlessMode = workerToServerReportStepGapInServerlessMode;
+		settings.periodOfTrafficWaitForTramAtStop = periodOfTrafficWaitForTramAtStop;
+		settings.driverProfileDistribution = setDriverProfileDistribution(driverProfileDistribution);
+		settings.lookAheadDistance = lookAheadDistance;
+		settings.trafficLightTiming = LightUtil.getLightTypeFromString(trafficLightTiming);
+		settings.isVisualize = isVisualize;
+		settings.isServerBased = isServerBased;
+		settings.routingAlgorithm = RouteUtil.getRoutingAlgorithmFromString(routingAlgorithm);
+		settings.isAllowPriorityVehicleUseTramTrack = isAllowPriorityVehicleUseTramTrack;
+		settings.isOutputInitialRoutes = isOutputInternalBackgroundRoutePlan;
+		settings.isOutputTrajectory = isOutputForegroundTrajectory;
+		settings.listRouteSourceWindowForInternalVehicle = setRouteSourceDestinationWindow(listRouteSourceWindowForInternalVehicle);
+		settings.listRouteDestinationWindowForInternalVehicle = setRouteSourceDestinationWindow(listRouteDestinationWindowForInternalVehicle);
+		settings.listRouteSourceDestinationWindowForInternalVehicle = setRouteSourceDestinationWindow(listRouteSourceDestinationWindowForInternalVehicle);
+		settings.isAllowReroute = isAllowReroute;
+		settings.isAllowTramRule = isAllowTramRule;
+		settings.isDriveOnLeft = isDriveOnLeft;
+	}
+
+	/**
+	 * Set the percentage of drivers with different profiles, from highly
+	 * aggressive to highly polite.
+	 */
+	ArrayList<Double> setDriverProfileDistribution(final ArrayList<SerializableDouble> sList) {
+		final ArrayList<Double> list = new ArrayList<>();
+		for (final SerializableDouble sd : sList) {
+			list.add(sd.value);
+		}
+		return list;
+	}
+
+	ArrayList<double[]> setRouteSourceDestinationWindow(final ArrayList<Serializable_GPS_Rectangle> sList) {
+		final ArrayList<double[]> list = new ArrayList<>();
+		for (final Serializable_GPS_Rectangle sgr : sList) {
+			list.add(new double[] { sgr.minLon, sgr.maxLat, sgr.maxLon, sgr.minLat });
+		}
+		return list;
+	}
 }

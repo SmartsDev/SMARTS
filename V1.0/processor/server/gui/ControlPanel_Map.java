@@ -1,19 +1,14 @@
 package processor.server.gui;
 
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 import javax.swing.DefaultListModel;
@@ -27,19 +22,16 @@ import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 
 import common.Settings;
-
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.LayoutStyle.ComponentPlacement;
-import javax.swing.SwingConstants;
 
 public class ControlPanel_Map extends JPanel {
 	class CountryCentroid {
 		String name;
 		double latitude, longitude;
 
-		public CountryCentroid(final String name, final double latitude,
-				final double longitude) {
+		public CountryCentroid(final String name, final double latitude, final double longitude) {
 			this.name = name;
 			this.latitude = latitude;
 			this.longitude = longitude;
@@ -48,7 +40,6 @@ public class ControlPanel_Map extends JPanel {
 
 	private final JCheckBox chckbxRoadNetworkGraph;
 	private final JCheckBox chckbxStaticMapImage;
-	private final JCheckBox chckbxPlaceNames;
 	private MonitorPanel monitorPanel;
 	public final JButton btnLoadOpenstreetmapFile;
 	private final JFileChooser fc = new JFileChooser();
@@ -58,56 +49,42 @@ public class ControlPanel_Map extends JPanel {
 	public final JLabel lblSelectablePlaces;
 
 	private final GUI gui;
-	private JPanel panel;
-	private JLabel lblPlaceNamesAre;
-	private JLabel lblCities;
-	private JLabel lblBy;
-	private JLabel lblLicence;
+	private Settings settings;
 
-	public ControlPanel_Map(final GUI gui) {
+	public ControlPanel_Map(final GUI gui, Settings settings) {
 		this.gui = gui;
-		setPreferredSize(new Dimension(450, 472));
+		this.settings = settings;
+		setPreferredSize(new Dimension(450, 466));
 
 		// Set default directory of file chooser
 		final File workingDirectory = new File(System.getProperty("user.dir"));
 		fc.setCurrentDirectory(workingDirectory);
 
 		chckbxRoadNetworkGraph = new JCheckBox("Show road network graph");
-		chckbxRoadNetworkGraph.setBounds(20, 7, 283, 23);
 		chckbxRoadNetworkGraph.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		chckbxRoadNetworkGraph.setSelected(true);
 
-		chckbxPlaceNames = new JCheckBox(
-				"Show place names from GeoNames.org");
-		chckbxPlaceNames.setBounds(20, 69, 283, 23);
-		chckbxPlaceNames.setFont(new Font("Tahoma", Font.PLAIN, 13));
+		chckbxStaticMapImage = new JCheckBox("Show map image in background");
+		chckbxStaticMapImage.setFont(new Font("Tahoma", Font.PLAIN, 13));
 
-		btnLoadOpenstreetmapFile = new JButton(
-				"Import roads from OpenStreetMap file");
-		btnLoadOpenstreetmapFile.setBounds(20, 421, 261, 34);
+		btnLoadOpenstreetmapFile = new JButton("Import roads from OpenStreetMap file");
 		btnLoadOpenstreetmapFile.setFont(new Font("Tahoma", Font.PLAIN, 13));
-		loadRegionCentroids();
+		loadRegionCentroids(settings.inputBuiltinAdministrativeRegionCentroid);
 		fillCountryNameToList();
 
 		lblSelectablePlaces = new JLabel("Road map areas");
-		lblSelectablePlaces.setBounds(20, 146, 94, 25);
-		setLayout(null);
-		listCountryName.setBounds(1, 1, 298, 237);
 
 		listCountryName.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		listCountryName.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		add(listCountryName);
 		final JScrollPane listScroller = new JScrollPane(listCountryName);
-		listScroller.setBounds(20, 173, 300, 239);
 
 		btnCenterMapToSelectedPlace = new JButton("Locate");
-		btnCenterMapToSelectedPlace.setBounds(332, 171, 79, 25);
 		btnCenterMapToSelectedPlace.setFont(new Font("Tahoma", Font.PLAIN, 13));
 		btnCenterMapToSelectedPlace.addActionListener(new ActionListener() {
 			public void actionPerformed(final ActionEvent arg0) {
 				if (monitorPanel.currentZoom != monitorPanel.zoomAtRelocation) {
-					monitorPanel
-							.changeZoomFromCenter(monitorPanel.zoomAtRelocation);
+					monitorPanel.changeZoomFromCenter(monitorPanel.zoomAtRelocation);
 				}
 				// Coordinates of selected place
 				final String name = (String) listCountryName.getSelectedValue();
@@ -130,115 +107,50 @@ public class ControlPanel_Map extends JPanel {
 
 			}
 		});
-		add(chckbxRoadNetworkGraph);
-		add(chckbxPlaceNames);
-		add(listScroller);
-		add(lblSelectablePlaces);
-		add(btnCenterMapToSelectedPlace);
-		add(btnLoadOpenstreetmapFile);
-
-
-		lblPlaceNamesAre = new JLabel("Place names are from ");
-		lblPlaceNamesAre.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblPlaceNamesAre.setBounds(45, 96, 132, 16);
-		lblPlaceNamesAre.setHorizontalAlignment(SwingConstants.LEFT);
-		add(lblPlaceNamesAre);
-		
-		lblCities = new JLabel("cities500");
-		lblCities.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblCities.setBounds(177, 87,  55, 34);
-		lblCities.addMouseListener(new MouseAdapter() {
-			@Override
-		    public void mouseEntered(MouseEvent e) {
-		        lblCities.setText("<html><a href=''>cities500</a></html>");
-		    }
-			
-			@Override
-			public void mouseClicked(MouseEvent e) {
-			    try {
-			         
-			        Desktop.getDesktop().browse(new URI("http://download.geonames.org/export/dump/"));
-			         
-			    } catch (IOException | URISyntaxException e1) {
-			        e1.printStackTrace();
-			    }
-			}
-			
-			@Override
-		    public void mouseExited(MouseEvent e) {
-				lblCities.setText("cities500");
-		    }
-		});
-		add(lblCities);
-		
-		lblBy = new JLabel("by GeoNames.org");//https://www.geonames.org/
-		lblBy.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblBy.setBounds(234, 87, 132, 34);
-		lblBy.addMouseListener(new MouseAdapter() {
-			@Override
-		    public void mouseEntered(MouseEvent e) {
-				lblBy.setText("<html><a href=''>by GeoNames.org</a></html>");
-		    }
-			
-			@Override
-			public void mouseClicked(MouseEvent e) {
-			    try {
-			         
-			        Desktop.getDesktop().browse(new URI("https://www.geonames.org/"));
-			         
-			    } catch (IOException | URISyntaxException e1) {
-			        e1.printStackTrace();
-			    }
-			}
-			
-			@Override
-		    public void mouseExited(MouseEvent e) {
-				lblBy.setText("by GeoNames.org");
-		    }
-		});
-		add(lblBy);
-		
-		lblLicence = new JLabel("licensed under a Creative Commons Attribution 4.0 License");
-		lblLicence.setFont(new Font("Arial", Font.ITALIC, 13));
-		lblLicence.setBounds(45, 112, 367, 34);
-		lblLicence.addMouseListener(new MouseAdapter() {
-			@Override
-		    public void mouseEntered(MouseEvent e) {
-				lblLicence.setText("<html><a href=''>licensed under a Creative Commons Attribution 4.0 License</a></html>");
-		    }
-			
-			@Override
-			public void mouseClicked(MouseEvent e) {
-			    try {
-			         
-			        Desktop.getDesktop().browse(new URI("https://creativecommons.org/licenses/by/4.0/"));
-			         
-			    } catch (IOException | URISyntaxException e1) {
-			        e1.printStackTrace();
-			    }
-			}
-			
-			@Override
-		    public void mouseExited(MouseEvent e) {
-				lblLicence.setText("licensed under a Creative Commons Attribution 4.0 License");
-		    }
-		});
-		add(lblLicence);
-		
-		chckbxStaticMapImage = new JCheckBox("Show map image in background");
-		chckbxStaticMapImage.setBounds(20, 35, 212, 25);
-		add(chckbxStaticMapImage);
-		
+		GroupLayout groupLayout = new GroupLayout(this);
+		groupLayout.setHorizontalGroup(
+			groupLayout.createParallelGroup(Alignment.LEADING)
+				.addGroup(groupLayout.createSequentialGroup()
+					.addGap(20)
+					.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+						.addComponent(chckbxRoadNetworkGraph, GroupLayout.PREFERRED_SIZE, 283, GroupLayout.PREFERRED_SIZE)
+						.addComponent(chckbxStaticMapImage, GroupLayout.PREFERRED_SIZE, 283, GroupLayout.PREFERRED_SIZE)
+						.addGroup(groupLayout.createSequentialGroup()
+							.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+								.addComponent(listScroller, GroupLayout.DEFAULT_SIZE, 300, Short.MAX_VALUE)
+								.addComponent(lblSelectablePlaces))
+							.addPreferredGap(ComponentPlacement.RELATED)
+							.addComponent(btnCenterMapToSelectedPlace, GroupLayout.PREFERRED_SIZE, 79, GroupLayout.PREFERRED_SIZE))
+						.addComponent(btnLoadOpenstreetmapFile, GroupLayout.PREFERRED_SIZE, 261, GroupLayout.PREFERRED_SIZE))
+					.addContainerGap(44, Short.MAX_VALUE))
+		);
+		groupLayout.setVerticalGroup(
+			groupLayout.createParallelGroup(Alignment.LEADING)
+				.addGroup(groupLayout.createSequentialGroup()
+					.addGap(7)
+					.addComponent(chckbxRoadNetworkGraph, GroupLayout.PREFERRED_SIZE, 23, GroupLayout.PREFERRED_SIZE)
+					.addGap(3)
+					.addComponent(chckbxStaticMapImage, GroupLayout.PREFERRED_SIZE, 23, GroupLayout.PREFERRED_SIZE)
+					.addPreferredGap(ComponentPlacement.UNRELATED)
+					.addComponent(lblSelectablePlaces, GroupLayout.PREFERRED_SIZE, 25, GroupLayout.PREFERRED_SIZE)
+					.addGap(5)
+					.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+						.addComponent(listScroller, GroupLayout.PREFERRED_SIZE, 239, GroupLayout.PREFERRED_SIZE)
+						.addComponent(btnCenterMapToSelectedPlace))
+					.addGap(18)
+					.addComponent(btnLoadOpenstreetmapFile, GroupLayout.PREFERRED_SIZE, 34, GroupLayout.PREFERRED_SIZE)
+					.addContainerGap())
+		);
+		setLayout(groupLayout);
 	}
 
 	public void addListener() {
-
 		btnLoadOpenstreetmapFile.addActionListener(new ActionListener() {
 			public void actionPerformed(final ActionEvent e) {
 				final int returnVal = fc.showOpenDialog(null);
 				if (returnVal == JFileChooser.APPROVE_OPTION) {
 					final File file = fc.getSelectedFile();
-					Settings.inputOpenStreetMapFile = file.getPath();
+					settings.inputOpenStreetMapFile = file.getPath();
 					gui.changeMap();
 				}
 			}
@@ -247,8 +159,7 @@ public class ControlPanel_Map extends JPanel {
 		chckbxRoadNetworkGraph.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {
-				monitorPanel.switchRoadNetworkGraph(chckbxRoadNetworkGraph
-						.isSelected());
+				monitorPanel.switchRoadNetworkGraph(chckbxRoadNetworkGraph.isSelected());
 			}
 		});
 
@@ -258,18 +169,7 @@ public class ControlPanel_Map extends JPanel {
 				monitorPanel.switchStaticMapImage(chckbxStaticMapImage.isSelected());
 			}
 		});
-		
-		
-		chckbxPlaceNames.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent e) {
-				monitorPanel.switchPlaceNameImage(chckbxPlaceNames
-						.isSelected());
-			}
-		});
 
-		
-		
 	}
 
 	void fillCountryNameToList() {
@@ -280,17 +180,15 @@ public class ControlPanel_Map extends JPanel {
 		listCountryName.setModel(listModel);
 	}
 
-	void loadRegionCentroids() {
+	void loadRegionCentroids(String inputBuiltinAdministrativeRegionCentroid) {
 		try {
-			final InputStream inputStream = getClass().getResourceAsStream(
-					Settings.inputBuiltinAdministrativeRegionCentroid);
-			final BufferedReader bufferedReader = new BufferedReader(
-					new InputStreamReader(inputStream, "UTF-8"));
+			final InputStream inputStream = getClass()
+					.getResourceAsStream(inputBuiltinAdministrativeRegionCentroid);
+			final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
 			String line = bufferedReader.readLine();// Skip first line
 			while ((line = bufferedReader.readLine()) != null) {
 				final String[] items = line.split(",");
-				final CountryCentroid cc = new CountryCentroid(items[2],
-						Double.parseDouble(items[0]),
+				final CountryCentroid cc = new CountryCentroid(items[2], Double.parseDouble(items[0]),
 						Double.parseDouble(items[1]));
 				regionCentroids.add(cc);
 			}
@@ -305,4 +203,5 @@ public class ControlPanel_Map extends JPanel {
 	public void setMonitorPanel(final MonitorPanel monitor) {
 		monitorPanel = monitor;
 	}
+
 }

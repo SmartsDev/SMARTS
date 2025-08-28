@@ -7,9 +7,9 @@ package traffic.vehicle;
  *
  */
 public enum DriverProfile {
-	HIGHLY_AGGRESSIVE(0.5, 0.5, 4, 5, 5, 0.1, 0.01, 2, 5), AGGRESSIVE(1, 1, 3, 4, 4, 0.2, 0.25, 4, 30), NORMAL(2, 2, 2,
+	HIGHLY_AGGRESSIVE(0.5, 0.5, 4, 5, 5, 0.1, 0.01, 2, 5), AGGRESSIVE(1, 1, 3, 4, 4, 0.2, 0.25, 4, 60), NORMAL(2, 2, 2,
 			3, 3, 0.3, 0.5, 6,
-			60), POLITE(5, 3.5, 1.5, 2.5, 2.5, 0.4, 0.75, 8, 90), HIGHLY_POLITE(10, 5, 1, 2, 2, 0.5, 1, 10, 120);
+			90), POLITE(5, 3.5, 1.5, 2.5, 2.5, 0.4, 0.75, 8, 120), HIGHLY_POLITE(10, 5, 1, 2, 2, 0.5, 1, 10, 150);
 
 	/**
 	 * Minimum bumper-to-bumper distance to the front vehicle.

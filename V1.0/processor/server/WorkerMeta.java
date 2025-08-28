@@ -1,11 +1,14 @@
 package processor.server;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import processor.communication.MessageSender;
 import processor.communication.message.SerializableExternalVehicle;
+import processor.communication.message.SerializableInt;
 import processor.worker.Workarea;
 import traffic.road.GridCell;
+import traffic.road.Node;
 
 /**
  * Meta data of worker.
@@ -20,7 +23,9 @@ public class WorkerMeta {
 	public int numRandomBuses;
 	public WorkerState state = WorkerState.NEW;
 	public ArrayList<SerializableExternalVehicle> externalRoutes = new ArrayList<>();
-
+	public List<Node> lightNodes = new ArrayList<>();
+	public List<Node> nodesRoAddLight = new ArrayList<>();
+	public List<Node> nodesToRemoveLight = new ArrayList<>();
 	/**
 	 *
 	 * @param name

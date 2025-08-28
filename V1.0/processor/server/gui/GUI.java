@@ -13,12 +13,13 @@ import javax.swing.UIManager;
 
 import common.Settings;
 import osm.OSM;
+import processor.SimulationProcessor;
 import processor.communication.message.Serializable_GUI_Light;
 import processor.communication.message.Serializable_GUI_Vehicle;
 import processor.server.Server;
 import traffic.road.RoadNetwork;
 import traffic.road.RoadUtil;
-
+import traffic.road.Edge;
 /**
  * GUI contains the panels for controlling simulation and showing the progress
  * of simulation in real time.
@@ -30,24 +31,24 @@ public class GUI extends JFrame {
 	MonitorPanel monitorPanel;
 	ControlPanel controlPanel;
 	JScrollPane controlPanelHolder;
-	Server server;
+	SimulationProcessor processor;
 	int frameWidth, frameHeight;
 	public int stepToDraw = 0;
 	int lastVisualizedStep = 0;
 	long lastSpeedUpUpdateTimeStamp = 0;
 	double lastSpeedUp = 0;
+	private Settings settings;
 
 	enum VehicleDetailType {
-		Type, Remaining_Links, ID_Worker, Driver_Profile
+		Type, Remaining_Links, ID_Worker, Driver_Profile, Slowdown_Factor, HeadwayMultiplier
 	}
 
 	private final HashMap<String, ArrayList<Serializable_GUI_Vehicle>> guiVehicleList = new HashMap<>();
 	private final HashMap<String, ArrayList<Serializable_GUI_Light>> guiLightList = new HashMap<>();
 
-	public GUI() {
-	}
 
-	public GUI(final Server server) {
+	public GUI(SimulationProcessor processor) {
+		this.settings = processor.getSettings();
 		setTitle("SMARTS Traffic Simulator");
 		computeFrameDimension();
 		setSize(new Dimension(frameWidth, frameHeight));
@@ -55,29 +56,46 @@ public class GUI extends JFrame {
 		setLocationRelativeTo(null);
 		setResizable(false);
 		setLayout(null);
-		this.server = server;
+		this.processor = processor;
 		try {
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		initComponenets(server);
+		initComponenets(processor);
 		addWindowListener(new WindowAdapter() {
 			public void windowClosing(final WindowEvent we) {
-				server.killConnectedWorkers();
+				processor.onClose();
 				System.exit(0);
 			}
 		});
 	}
 
 	public void changeMap() {
-		server.stopSim();
-		server.changeMap();
+		processor.stopSim();
+		processor.changeMap();
 		monitorPanel.setEnabled(false);
-		monitorPanel.changeMap(server.roadNetwork.minLon, server.roadNetwork.minLat, server.roadNetwork.maxLon,
-				server.roadNetwork.maxLat);
+		RoadNetwork roadNetwork = processor.getRoadNetwork();
+		monitorPanel.changeMap(roadNetwork.minLon, roadNetwork.minLat,roadNetwork.maxLon, roadNetwork.maxLat);
 		getReadyToSetup();
 		monitorPanel.setEnabled(true);
+	}
+
+	public void loadMapChange(){
+		processor.changeMap();
+		monitorPanel.setEnabled(false);
+		RoadNetwork roadNetwork = processor.getRoadNetwork();
+		monitorPanel.changeMap(roadNetwork.minLon, roadNetwork.minLat,roadNetwork.maxLon, roadNetwork.maxLat);
+		getReadyToSetup();
+		monitorPanel.setEnabled(true);
+	}
+
+	public void updateGuiComps(){
+		controlPanel.cpMiscConfig.updateGuiComps();
+	}
+
+	public void runSimulationAuto(){
+		controlPanel.cpMiscConfig.getBtnSetupWorkers().doClick();
 	}
 
 	public void clearObjectData() {
@@ -88,8 +106,8 @@ public class GUI extends JFrame {
 	void computeFrameDimension() {
 		final int maxWidthMonitorPanel = 3840;
 		final int maxHeightMonitorPanel = 2160;
-		final int maxWidthWholeFrame = maxWidthMonitorPanel + Settings.controlPanelWidth
-				+ Settings.controlPanelGapToRight;
+		final int maxWidthWholeFrame = maxWidthMonitorPanel + settings.controlPanelWidth
+				+ settings.controlPanelGapToRight;
 		frameWidth = GuiUtil.getWorkingScreenWidth() > maxWidthWholeFrame ? maxWidthWholeFrame
 				: GuiUtil.getWorkingScreenWidth();
 		frameHeight = GuiUtil.getWorkingScreenHeight() > maxHeightMonitorPanel ? maxHeightMonitorPanel
@@ -103,7 +121,7 @@ public class GUI extends JFrame {
 	 *
 	 */
 	int getMonitorPanelWidth() {
-		int width = frameWidth - Settings.controlPanelWidth - Settings.controlPanelGapToRight;
+		int width = frameWidth - settings.controlPanelWidth - settings.controlPanelGapToRight;
 		if ((width % 2) != 0) {
 			width -= 1;
 		}
@@ -124,15 +142,15 @@ public class GUI extends JFrame {
 		controlPanel.prepareToSetup();
 	}
 
-	void initComponenets(final Server server) {
+	void initComponenets(SimulationProcessor processor) {
 		queryResult = new GuiStatistic();
 
-		monitorPanel = new MonitorPanel(server, this, queryResult,
+		monitorPanel = new MonitorPanel(processor, this, queryResult,
 				new Dimension(getMonitorPanelWidth(), getMonitorPanelHeightWidth()));
 		add(monitorPanel);
 
 		final Dimension rightPanelDimension = new Dimension(frameWidth - getMonitorPanelWidth(), frameHeight);
-		controlPanel = new ControlPanel(server, this, monitorPanel.displayPanelDimension.width, 0, rightPanelDimension);
+		controlPanel = new ControlPanel(processor, this, monitorPanel.displayPanelDimension.width, 0, rightPanelDimension);
 		controlPanelHolder = new JScrollPane();
 		controlPanelHolder.setViewportView(controlPanel);
 		controlPanelHolder.getVerticalScrollBar().setUnitIncrement(16);
@@ -180,12 +198,12 @@ public class GUI extends JFrame {
 				double realTimeFactor = lastSpeedUp;
 				if (timeGapToLastSpeedUpUpdate > 1) {
 					final int stepGap = this.stepToDraw - lastVisualizedStep;
-					realTimeFactor = stepGap / Settings.numStepsPerSecond / timeGapToLastSpeedUpUpdate;
+					realTimeFactor = stepGap / settings.numStepsPerSecond / timeGapToLastSpeedUpUpdate;
 					lastSpeedUpUpdateTimeStamp = System.currentTimeMillis();
 					lastSpeedUp = realTimeFactor;
 					lastVisualizedStep = this.stepToDraw;
 				}
-				monitorPanel.update(guiVehicleList, guiLightList, lastSpeedUp);
+				monitorPanel.update(guiVehicleList, guiLightList, lastSpeedUp, settings.numStepsPerSecond);
 				clearObjectData();
 			}
 		}
@@ -194,6 +212,10 @@ public class GUI extends JFrame {
 
 	public void updateSetupProgress(final double createdVehicleRatio) {
 		monitorPanel.updateSetupProgress(createdVehicleRatio);
+	}
+
+	public void updateEdgeObjects(Edge edge){
+		monitorPanel.updateEdgeObject(edge);
 	}
 
 }

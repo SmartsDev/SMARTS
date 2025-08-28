@@ -13,6 +13,7 @@ import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 
 import common.Settings;
+import processor.SimulationProcessor;
 import processor.Simulator;
 import processor.server.Server;
 import javax.swing.GroupLayout;
@@ -26,7 +27,7 @@ public class ControlPanel_Resource extends JPanel {
 	final JLabel lblConnectedWorkers;
 	private JTextField textField_numConnectedWorkers;
 
-	public ControlPanel_Resource(final Server server, final ControlPanel parentPanel) {
+	public ControlPanel_Resource(SimulationProcessor processor, final ControlPanel parentPanel) {
 		setPreferredSize(new Dimension(450, 97));
 
 		btnApply = new JButton("Apply");
@@ -34,7 +35,7 @@ public class ControlPanel_Resource extends JPanel {
 			public void actionPerformed(final ActionEvent e) {
 				if (verifyParameterInput()) {
 					GuiUtil.setEnabledStatusOfComponents(parentPanel.cpMiscConfig, false);
-					server.killConnectedWorkers();
+					processor.onClose();
 					updateNumConnectedWorkers(0);
 					Settings.numWorkers = Integer.parseInt(textField_numWorkerRequired.getText());
 					if (Settings.isSharedJVM) {

@@ -53,9 +53,9 @@ public class Dijkstra extends Routing {
 			return 0;
 		}
 
-	};
+	}
 
-	enum DijkstraVertexState {
+    enum DijkstraVertexState {
 		Unvisited, Visited, None
 	}
 
@@ -89,7 +89,7 @@ public class Dijkstra extends Routing {
 		}
 	}
 
-	public void computePathsFromTo(final Edge startEdge, final Edge endEdge, final VehicleType type) {
+	public void computePathsFromTo(final Node sourceNode, final Node destinationNode, final VehicleType type) {
 		// Reset
 		for (final DijkstraVertex v : vertices) {
 			v.minDistance = Double.POSITIVE_INFINITY;
@@ -97,8 +97,8 @@ public class Dijkstra extends Routing {
 			v.state = DijkstraVertexState.None;
 		}
 
-		final Node sourceNode = startEdge.startNode;
-		final Node destinationNode = endEdge.endNode;
+//		final Node sourceNode = startEdge.startNode;
+//		final Node destinationNode = endEdge.endNode;
 
 		final DijkstraVertex source = vertices.get(sourceNode.index);
 		source.minDistance = 0;
@@ -118,7 +118,7 @@ public class Dijkstra extends Routing {
 
 			// Visit each edge exiting u
 			for (final DijkstraEdge e : u.adjacencies) {
-				if (!VehicleUtil.canGoThrough(u.node, e.target.node, type)) {
+				if (!VehicleUtil.canGoThrough(u.node, e.target.node, type, settings.isAllowPriorityVehicleUseTramTrack)) {
 					continue;
 				}
 				final DijkstraVertex v = e.target;
@@ -140,10 +140,10 @@ public class Dijkstra extends Routing {
 		}
 	}
 
-	public ArrayList<RouteLeg> createCompleteRoute(final Edge startEdge, final Edge endEdge, final VehicleType type) {
-
-		computePathsFromTo(startEdge, endEdge, type);
-		final List<DijkstraVertex> path = getPathTo(endEdge.endNode);
+	public ArrayList<RouteLeg> createCompleteRoute(Node start, Node end, final VehicleType type) {
+		//StartEdge should be fixed to add vehicle . Otherwise it creates incorrect routes
+		computePathsFromTo(start, end, type);
+		final List<DijkstraVertex> path = getPathTo(end);
 		if (path.size() < 2) {
 			return null;
 		}
@@ -152,7 +152,6 @@ public class Dijkstra extends Routing {
 			final Edge edge = getEdgeFromVertices(path.get(i - 1), path.get(i));
 			legsOnRoute.add(new RouteLeg(edge, 0));
 		}
-		RouteUtil.removeRepeatSections(legsOnRoute);
 		return legsOnRoute;
 	}
 

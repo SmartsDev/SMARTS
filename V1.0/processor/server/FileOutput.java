@@ -3,30 +3,36 @@ package processor.server;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
+import java.io.ObjectOutputStream;
+import java.util.*;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import common.Settings;
 import common.SysUtil;
-import processor.communication.message.SerializableRoute;
+import processor.communication.message.SerializableRouteDump;
 import processor.communication.message.SerializableRouteDumpPoint;
 import processor.communication.message.SerializableTrajectory;
-import traffic.routing.Routing;
+import processor.communication.message.Serializable_Finished_Vehicle;
 
 public class FileOutput {
 	FileOutputStream fosLog;
 	FileOutputStream fosTrajectory;
 	FileOutputStream fosRoute;
-	FileOutputStream fosTravelTime;
+	FileOutputStream trjFos;
+	FileOutputStream vdFos;
+	FileOutputStream bestTTFos;
+	FileOutputStream expSettings;
+	private Settings settings;
+
+	public FileOutput(Settings settings) {
+		this.settings = settings;
+	}
 
 	/**
 	 * Close output file
 	 */
-	void close() {
+	public void close() {
 		try {
 			if (fosLog != null) {
 				fosLog.close();
@@ -38,8 +44,14 @@ public class FileOutput {
 				outputStringToFile(fosRoute, "</data>");
 				fosRoute.close();
 			}
-			if (fosTravelTime != null) {
-				fosTravelTime.close();
+			if(trjFos != null){
+				trjFos.close();
+			}
+			if(vdFos != null){
+				vdFos.close();
+			}
+			if(bestTTFos != null){
+				bestTTFos.close();
 			}
 		} catch (final IOException e) {
 			// TODO Auto-generated catch block
@@ -47,36 +59,71 @@ public class FileOutput {
 		}
 	}
 
-	void init() {
-		if (Settings.outputTrajectoryScope != DataOutputScope.NONE) {
+	public void init() {
+		if (settings.isOutputTrajectory) {
 			initTrajectoryOutputFile();
 		}
-		if (Settings.outputRouteScope != DataOutputScope.NONE) {
+		if (settings.isOutputInitialRoutes) {
 			initRouteOutputFile();
+			initBestTTOutputFile();
 		}
-		if (Settings.outputTravelTimeScope != DataOutputScope.NONE) {
-			initTravelTimeOutputFile();
-		}
-		if (Settings.isOutputSimulationLog) {
+		if (settings.isOutputSimulationLog) {
 			initSimLogOutputFile();
 		}
+		//initTrjOutputFile(); TODO: Removed by Udesh
+		initVDOutputFile();
+		saveSettingsToXML();
 	}
 
-	File getNewFile(String prefix) {
-		String fileName = prefix + SysUtil.getTimeStampString() + ".txt";
+
+	public void saveSettingsToXML(){
+		Gson gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().setPrettyPrinting().create();
+		String str = gson.toJson(settings);
+		System.out.println("Settings: " + str);
+		try {
+			final File fileTrj = getNewFile("Settings_"+settings.getOutputPrefix());
+			// Print column titles
+			expSettings = new FileOutputStream(fileTrj, true);
+			outputStringToFile(expSettings,
+					str + System.getProperty("line.separator"));
+		} catch (final IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+
+	}
+
+	File getNewFile(String prefix, String extension) {
+		File downloadDir = new File(settings.downloadDirectory);
+		if(!downloadDir.exists()){
+			System.out.println("Download directory not exist. Creating a new directory");
+			downloadDir.mkdirs();
+		}
+		String testName = settings.testName;
+		if(testName == null){
+			testName = prefix + SysUtil.getTimeStampString();
+		}else{
+			testName = prefix + testName;
+		}
+		String fileName = settings.downloadDirectory + "/" + testName + "." +extension;
 		File file = new File(fileName);
 		int counter = 0;
 		while (file.exists()) {
 			counter++;
-			fileName = prefix + SysUtil.getTimeStampString() + "_" + counter + ".txt";
+			fileName = settings.downloadDirectory + "/" + testName + "_" + counter + ".txt";
 			file = new File(fileName);
 		}
 		return file;
 	}
 
+	File getNewFile(String prefix) {
+		return getNewFile(prefix ,"txt");
+	}
+
 	void initRouteOutputFile() {
 		try {
-			final File file = getNewFile(Settings.prefixOutputRoutePlan);
+			final File file = getNewFile(settings.prefixOutputRoutePlan);
 			fosRoute = new FileOutputStream(file, true);
 			outputStringToFile(fosRoute,
 					"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + System.getProperty("line.separator"));
@@ -87,26 +134,14 @@ public class FileOutput {
 		}
 	}
 
-	void initTravelTimeOutputFile() {
-		try {
-			final File file = getNewFile(Settings.prefixOutputTravelTime);
-			// Print column titles
-			fosTravelTime = new FileOutputStream(file, true);
-			outputStringToFile(fosTravelTime, "Vehicle ID,Travel Time" + System.getProperty("line.separator"));
-		} catch (final IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
-
 	void initSimLogOutputFile() {
+
 		try {
-			final File file = getNewFile(Settings.prefixOutputSimLog);
+			final File file = getNewFile(settings.prefixOutputSimLog);
 			// Print column titles
 			fosLog = new FileOutputStream(file, true);
-			outputStringToFile(fosLog,
-					"Time Stamp, Real Time (s), Simulation Time (s), # of Worker-Worker Connections, Average Travel Speed (km/h)"
-							+ System.getProperty("line.separator"));
+			outputStringToFile(fosLog, "Time Stamp, Real Time(s), Simulation Time(s), # of Worker-Worker Connections"
+					+ System.getProperty("line.separator"));
 		} catch (final Exception e) {
 			e.printStackTrace();
 		}
@@ -114,59 +149,72 @@ public class FileOutput {
 
 	void initTrajectoryOutputFile() {
 		try {
-			final File file = getNewFile(Settings.prefixOutputTrajectory);
+			final File file = getNewFile(settings.prefixOutputTrajectory);
 			// Print column titles
 			fosTrajectory = new FileOutputStream(file, true);
 			outputStringToFile(fosTrajectory,
-					"Trajectory ID,Vehicle ID,Vehicle Type,Time Stamp,Latitude,Longitude" + System.getProperty("line.separator"));
+					"Trajectory ID,Vehicle ID,Time Stamp,Displacement, Latitude,Longitude" + System.getProperty("line.separator"));
 		} catch (final IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 
-	void outputTravelTime(HashMap<String, Double> records) {
-		if (fosTravelTime != null) {
-			try {
-				final StringBuilder sb = new StringBuilder();
-				for (final Entry<String, Double> record : records.entrySet()) {
-					String vehicleId = record.getKey();
-					double travelTime = record.getValue();
-					sb.append(vehicleId);
-					sb.append(",");
-					sb.append(travelTime);
-					sb.append(System.getProperty("line.separator"));
-				}
-				outputStringToFile(fosTravelTime, sb.toString());
-			} catch (final Exception e) {
-				e.printStackTrace();
-			}
+	void initTrjOutputFile() {
+		try {
+			final File fileTrj = getNewFile("Trj_", "trj");
+			// Print column titles
+			trjFos = new FileOutputStream(fileTrj, true);
+		} catch (final IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	void initVDOutputFile() {
+		try {
+			final File fileTrj = getNewFile("VD_"+settings.getOutputPrefix());
+			// Print column titles
+			vdFos = new FileOutputStream(fileTrj, true);
+			outputStringToFile(vdFos,
+					"ID,VID,Source,Destination,BestTravelTime,ActualTravelTime,timeStamp,RouteLength,TimeOnDirectional,TimeOnDirectionalSpeed,Route" + System.getProperty("line.separator"));
+		} catch (final IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	void initBestTTOutputFile() {
+		try {
+			final File fileTrj = getNewFile("BestTT_");
+			// Print column titles
+			bestTTFos = new FileOutputStream(fileTrj, true);
+			outputStringToFile(bestTTFos,
+					"ID,VID,Source,Destination,BestTravelTime,ActualTravelTime,RouteLength,Route" + System.getProperty("line.separator"));
+		} catch (final IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 
 	/**
 	 * Output trajectory of individual vehicles
 	 */
-	void outputTrajectories(HashMap<String, TreeMap<Double, double[]>> allTrajectories) {
-		if (fosTrajectory != null) {
+	public void outputTrajectories(HashMap<String, TreeMap<Double, double[]>> allTrajectories) {
+		if (settings.isOutputTrajectory) {
 			int trajectoryId = 0;
-			for (String key : allTrajectories.keySet()) {
-				// Trajectory counter
+			for (String vehicleId : allTrajectories.keySet()) {
+				// Trajectory counter	
 				trajectoryId++;
 				outputStringToFile(fosTrajectory, String.valueOf(trajectoryId));
 				outputStringToFile(fosTrajectory, ",");
-				String[] itemsInKey=key.split("_");
-				String vehicleId=itemsInKey[0];
-				String vehileType=itemsInKey[1];
 				outputStringToFile(fosTrajectory, vehicleId);
 				outputStringToFile(fosTrajectory, ",");
-				outputStringToFile(fosTrajectory, vehileType);
-				outputStringToFile(fosTrajectory, ",");
-				TreeMap<Double, double[]> points = allTrajectories.get(key);
+				TreeMap<Double, double[]> points = allTrajectories.get(vehicleId);
 				ArrayList<Double> timeStamps = new ArrayList<Double>(points.keySet());
 				for (int i = 0; i < timeStamps.size(); i++) {
 					if (i > 0) {
-						outputStringToFile(fosTrajectory, ",,,");
+						outputStringToFile(fosTrajectory, ",,");
 					}
 					double timeStamp = timeStamps.get(i);
 					outputStringToFile(fosTrajectory, String.valueOf(timeStamp));
@@ -175,6 +223,9 @@ public class FileOutput {
 					outputStringToFile(fosTrajectory, String.valueOf(point[0]));
 					outputStringToFile(fosTrajectory, ",");
 					outputStringToFile(fosTrajectory, String.valueOf(point[1]));
+					outputStringToFile(fosTrajectory, ",");
+					outputStringToFile(fosTrajectory, String.valueOf(point[2]));
+
 					outputStringToFile(fosTrajectory, System.getProperty("line.separator"));
 
 				}
@@ -182,13 +233,13 @@ public class FileOutput {
 		}
 	}
 
-	void outputRoutes(final ArrayList<SerializableRoute> routes) {
-		if (fosRoute != null) {
+	public void outputRoutes(final ArrayList<SerializableRouteDump> routes) {
+		if (settings.isOutputInitialRoutes) {
 			try {
 				final StringBuilder sb = new StringBuilder();
-				for (final SerializableRoute route : routes) {
+				for (final SerializableRouteDump route : routes) {
 					sb.append("<vehicle ");
-					sb.append("id=\"" + route.vehicleId + "\" type=\"" + route.type + "\" start_time=\""
+					sb.append("id=\"" + route.vehicleId + "\" vid=\"" + route.vid +"\" type=\"" + route.type + "\" start_time=\""
 							+ route.startTime + "\" driverProfile=\"" + route.driverProfile + "\">"
 							+ System.getProperty("line.separator"));
 					for (final SerializableRouteDumpPoint point : route.routeDumpPoints) {
@@ -210,20 +261,32 @@ public class FileOutput {
 		}
 	}
 
-	void outputSimLog(final int stepCurrent, final double simulationTimeCounter, final int totalNumFellowsOfWorker,
-			final double vehicleCount, final double aggregatedSpeedValue) {
+	public void outputBestTTData(List<SerializableRouteDump> routes){
+		for (SerializableRouteDump route : routes) {
+			StringBuilder sb = new StringBuilder();
+			sb.append(route.vehicleId+",");
+			sb.append(route.vid+",");
+			sb.append(route.s+",");
+			sb.append(route.d+",");
+			sb.append(route.spTime+",");
+			sb.append(route.spTime+",");
+			sb.append(route.spLength+",");
+			sb.append(route.route+ System.getProperty("line.separator"));
+			outputStringToFile(bestTTFos, sb.toString());
+		}
+	}
+
+	public void outputSimLog(final int stepCurrent, final double simulationTimeCounter, final int totalNumFellowsOfWorker, int resolution) {
 		final Date date = new Date();
 
-		if (fosLog != null) {
+		if (settings.isOutputSimulationLog && (fosLog != null)) {
 			outputStringToFile(fosLog, date.toString());
 			outputStringToFile(fosLog, ",");
-			outputStringToFile(fosLog, String.valueOf(stepCurrent / Settings.numStepsPerSecond));
+			outputStringToFile(fosLog, String.valueOf(stepCurrent / resolution));
 			outputStringToFile(fosLog, ",");
 			outputStringToFile(fosLog, String.valueOf(simulationTimeCounter));
 			outputStringToFile(fosLog, ",");
 			outputStringToFile(fosLog, String.valueOf(totalNumFellowsOfWorker));
-			outputStringToFile(fosLog, ",");
-			outputStringToFile(fosLog, String.valueOf(aggregatedSpeedValue / vehicleCount * 3.6));
 			outputStringToFile(fosLog, System.getProperty("line.separator"));
 		}
 	}
@@ -239,12 +302,11 @@ public class FileOutput {
 		}
 	}
 
-	public static DataOutputScope getScopeFromString(String selected) {
-		for (final DataOutputScope scope : DataOutputScope.values()) {
-			if (selected.equalsIgnoreCase(scope.name())) {
-				return scope;
-			}
-		}
-		return DataOutputScope.NONE;
+	public FileOutputStream getTrjFos() {
+		return trjFos;
+	}
+
+	public FileOutputStream getVdFos() {
+		return vdFos;
 	}
 }

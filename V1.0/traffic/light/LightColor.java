@@ -5,18 +5,12 @@ package traffic.light;
  *
  */
 public enum LightColor {
-	GYR_G("G", 10, 180, 30), GYR_Y("Y", 10, 10, 10), GYR_R("R", 5, 5, 5), KEEP_RED("KR", 0, 0, 0);
+	GYR_G("G"), GYR_Y("Y"), GYR_R("R"), KEEP_RED("KR");
 	
 	public String color;
-	public double minDynamicTime;
-	public double maxDynamicTime;
-	public double fixedTime;
 
-	LightColor(final String color, final double minDynamicTime, final double maxDynamicTime, final double fixedTime) {
+	LightColor(final String color) {
 		this.color = color;
-		this.minDynamicTime = minDynamicTime;
-		this.maxDynamicTime = maxDynamicTime;
-		this.fixedTime = fixedTime;
 	}
 
 }

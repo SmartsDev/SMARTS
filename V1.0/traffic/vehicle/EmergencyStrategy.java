@@ -5,5 +5,5 @@ package traffic.vehicle;
  *
  */
 public enum EmergencyStrategy {
-	NonEmergencyMoveToRoadside, NonEmergencyPullOffToRoadside, Flexible;
+	NonEmergencyMoveToRoadside, NonEmergencyPullOffToRoadside, Flexible
 }

@@ -44,10 +44,10 @@ public class Message_WW_Traffic {
 	ArrayList<SerializableFrontVehicleOnBorder> getLastVehiclesLeftReceiver(final Fellow receiver) {
 		final ArrayList<SerializableFrontVehicleOnBorder> serializableInfo = new ArrayList<>();
 		for (final Edge edge : receiver.outwardEdgesAcrossBorder) {
-			for (final Lane lane : edge.lanes) {
+			for (final Lane lane : edge.getLanes()) {
 				final SerializableFrontVehicleOnBorder oneV = new SerializableFrontVehicleOnBorder();
 				oneV.laneIndex = lane.index;
-				final Vehicle lastV = VehicleUtil.getLastVehicle(lane);
+				final Vehicle lastV = lane.getLastVehicleInLane();
 				if (lastV == null) {
 					oneV.endPosition = edge.length + 1;
 					oneV.speed = 10000;
@@ -63,7 +63,7 @@ public class Message_WW_Traffic {
 
 	ArrayList<SerializableRouteLeg> getSerializableRoute(final Vehicle vehicle) {
 		final ArrayList<SerializableRouteLeg> legs = new ArrayList<>();
-		for (final RouteLeg leg : vehicle.routeLegs) {
+		for (final RouteLeg leg : vehicle.getRouteLegs()) {
 			legs.add(new SerializableRouteLeg(leg.edge.index, leg.stopover));
 		}
 		return legs;

@@ -6,6 +6,8 @@ import java.net.Socket;
 import common.Settings;
 import processor.server.Server;
 import processor.worker.Worker;
+import org.zeromq.ZContext;
+import org.zeromq.ZMQ;
 
 /**
  * Class for running a simulator with a single JVM.
@@ -19,7 +21,6 @@ public class Simulator {
 			worker.run();
 		}
 	}
-
 	static boolean isPortFree(final int port) {
 		try (Socket ignored = new Socket("127.0.0.1", port)) {
 			return false;
@@ -35,7 +36,6 @@ public class Simulator {
 	 */
 	public static void main(final String[] args) {
 		Settings.isSharedJVM = true;
-		Settings.isVisualize = true;
 		if (isPortFree(Settings.serverListeningPortForWorkers)) {
 			startSystem();
 		} else {
@@ -45,7 +45,7 @@ public class Simulator {
 
 	static void startSystem() {
 
-		new Server().run();
+		new Server(false).run();
 		createWorkers();
 
 	}

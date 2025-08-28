@@ -3,6 +3,7 @@ package processor.server;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
@@ -26,118 +27,43 @@ import traffic.vehicle.VehicleType;
  *
  */
 public class RouteLoader {
-	class NodeIdComparator implements Comparator<NodeInfo> {
+	public class NodeIdComparator implements Comparator<NodeInfo> {
 		@Override
 		public int compare(final NodeInfo v1, final NodeInfo v2) {
 			// TODO Auto-generated method stub
-			return v1.osmId > v2.osmId ? -1 : v1.osmId == v2.osmId ? 0 : 1;
+			return v1.getOsmId() > v2.getOsmId() ? -1 : v1.getOsmId() == v2.getOsmId() ? 0 : 1;
 		}
 	}
 
-	class NodeInfo {
-		long osmId;
-
-		int index;
-
-		NodeInfo(final long osmId, final int index) {
-			super();
-			this.osmId = osmId;
-			this.index = index;
-		}
-	}
-
-	ArrayList<String> vehicles = new ArrayList<>(150000);
+	List<String> vehicles = new ArrayList<>(150000);
 	ArrayList<NodeInfo> idMappers = new ArrayList<>(300000);
 	RoadNetwork roadNetwork;
 	NodeIdComparator nodeIdComparator = new NodeIdComparator();
 
-	ArrayList<WorkerMeta> workers;
-
-	Server server;
-
-	public RouteLoader(final Server server, final ArrayList<WorkerMeta> workers) {
-		roadNetwork = server.roadNetwork;
-		this.workers = workers;
-		this.server = server;
+	public RouteLoader(RoadNetwork roadNetwork) {
+		this.roadNetwork = roadNetwork;
 	}
 
-	/**
-	 * Append route of vehicles to the workers whose work area covers the first
-	 * node of the route.
-	 */
-	void assignVehicleToWorker() {
-		// Clear routes from previous loading
-		for (final WorkerMeta worker : workers) {
-			worker.externalRoutes.clear();
+
+
+	public List<SerializableExternalVehicle> loadRoutes(String inputForegroundVehicleFile, String inputBackgroundVehicleFile) {
+		if (inputForegroundVehicleFile.length() > 0) {
+			scanXML(inputForegroundVehicleFile, true);
 		}
-		for (final String vehicle : vehicles) {
-			final String[] fields = vehicle.split(Settings.delimiterItem);
-			final boolean foreground = Boolean.parseBoolean(fields[0]);
-			final String id = fields[1];
-			final double start_time = Double.parseDouble(fields[2]);
-			final String type = fields[3];
-			final String driverProfile = fields[4];
-			final double repeatRate = Double.parseDouble(fields[5]);
-			final ArrayList<SerializableRouteLeg> route = getRouteFromString(fields[6]);
-			final Node routeStartNode = roadNetwork.edges.get(route.get(0).edgeIndex).startNode;
-			final WorkerMeta routeStartWorker = server.getWorkerAtRouteStart(routeStartNode);
-			routeStartWorker.externalRoutes.add(new SerializableExternalVehicle(foreground, id, start_time, type,
-					driverProfile, repeatRate, route));
+		if (inputBackgroundVehicleFile.length() > 0) {
+			scanXML(inputBackgroundVehicleFile, false);
 		}
-	}
-
-	ArrayList<SerializableRouteLeg> getRouteFromString(final String routeString) {
-
-		final String[] routeLegs = routeString.split(Settings.delimiterSubItem);
-		final ArrayList<SerializableRouteLeg> route = new ArrayList<>();
-		for (int i = 0; i < (routeLegs.length - 1); i++) {
-			final String[] currentLegDetails = routeLegs[i].split("#");
-			final String[] nextLegDetails = routeLegs[i + 1].split("#");
-			final long osmIdNd1 = Long.parseLong(currentLegDetails[0]);
-			final int mapperIndexNd1 = Collections.binarySearch(idMappers, new NodeInfo(osmIdNd1, -1),
-					nodeIdComparator);
-			// Stop processing further if node cannot be found
-			if (mapperIndexNd1 < 0) {
-				System.out.println("Cannot find node: " + osmIdNd1 + ". ");
-				break;
-			}
-
-			final int nodeIndexNd1 = idMappers.get(mapperIndexNd1).index;
-			final Node nd1 = roadNetwork.nodes.get(nodeIndexNd1);
-
-			// Get the edge and add it to a list
-			final long osmIdNd2 = Long.parseLong(nextLegDetails[0]);
-
-			for (final Edge e : nd1.outwardEdges) {
-				if (e.endNode.osmId == osmIdNd2) {
-					route.add(new SerializableRouteLeg(e.index, Double.parseDouble(currentLegDetails[1])));
-					break;
-				}
-			}
-		}
-
-		return route;
-	}
-
-	void loadRoutes() {
-
-		if (Settings.inputForegroundVehicleFile.length() > 0) {
-			scanXML(Settings.inputForegroundVehicleFile, true);
-		}
-		if (Settings.inputBackgroundVehicleFile.length() > 0) {
-			scanXML(Settings.inputBackgroundVehicleFile, false);
-		}
-
 		for (final Node node : roadNetwork.nodes) {
 			idMappers.add(new NodeInfo(node.osmId, node.index));
 		}
 		Collections.sort(idMappers, nodeIdComparator);
+		List<SerializableExternalVehicle> vehicleList = new ArrayList<>();
+		for (final String vehicle : vehicles) {
+			SerializableExternalVehicle ev = SerializableExternalVehicle.createFromString(vehicle, roadNetwork, idMappers, nodeIdComparator);
+			vehicleList.add(ev);
 
-		for (final WorkerMeta worker : workers) {
-			worker.externalRoutes.clear();
 		}
-
-		assignVehicleToWorker();
+		return vehicleList;
 	}
 
 	/**
@@ -154,12 +80,11 @@ public class RouteLoader {
 				StringBuilder sbOneV = new StringBuilder();
 
 				@Override
-				public void characters(final char ch[], final int start, final int length) throws SAXException {
+				public void characters(final char ch[], final int start, final int length) {
 				}
 
 				@Override
-				public void endElement(final String uri, final String localName, final String qName)
-						throws SAXException {
+				public void endElement(final String uri, final String localName, final String qName) {
 
 					if (qName.equals("vehicle")) {
 						vehicles.add(sbOneV.toString());
@@ -168,7 +93,7 @@ public class RouteLoader {
 
 				@Override
 				public void startElement(final String uri, final String localName, final String qName,
-						final Attributes attributes) throws SAXException {
+						final Attributes attributes) {
 
 					if (qName.equals("vehicle")) {
 						sbOneV.delete(0, sbOneV.length());
@@ -176,6 +101,8 @@ public class RouteLoader {
 						sbOneV.append(String.valueOf(foreground) + Settings.delimiterItem);
 						// Vehicle ID
 						sbOneV.append(attributes.getValue("id") + Settings.delimiterItem);
+						// Vehicle VID
+						sbOneV.append(attributes.getValue("vid") + Settings.delimiterItem);
 						// Vehicle start time (earliest time the vehicle could be released from parking)
 						String start_time = attributes.getValue("start_time");
 						if (start_time == null) {

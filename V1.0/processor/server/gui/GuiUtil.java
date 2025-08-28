@@ -15,6 +15,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 
 import javax.swing.InputVerifier;
 import javax.swing.JComponent;
@@ -25,20 +26,19 @@ import javax.swing.Timer;
 
 import common.Settings;
 import processor.server.Server;
-import traffic.road.RoadType;
 
 public class GuiUtil {
 
 	static class OSMDownloader extends SwingWorker<String, String> {
 		MonitorPanel monitor;
 		GUI gui;
-		Server server;
 		String nameDownloadedFile = "download.osm";
+		Settings settings;
 
-		OSMDownloader(final MonitorPanel monitor, final GUI gui, final Server server) {
+		OSMDownloader(final MonitorPanel monitor, final GUI gui, Settings settings) {
 			this.monitor = monitor;
 			this.gui = gui;
-			this.server = server;
+			this.settings = settings;
 		}
 
 		@Override
@@ -66,7 +66,7 @@ public class GuiUtil {
 				});
 				timerDownloadStatus.start();
 
-				try (BufferedReader reader = new BufferedReader(new InputStreamReader(response, "UTF-8"))) {
+				try (BufferedReader reader = new BufferedReader(new InputStreamReader(response, StandardCharsets.UTF_8))) {
 					for (String line; (line = reader.readLine()) != null;) {
 						sb.append(line);
 					}
@@ -109,10 +109,8 @@ public class GuiUtil {
 					+ ")";
 			// Select way and relations intersecting with query window except
 			// buildings
-			String queryString = queryStringPrefix + "(";
-			queryString += getOverpassWithRoadType(boundingBoxString);
-			queryString += "relation[\"route\"]" + boundingBoxString + ";";// Including route information such as tram routes
-			queryString += ");out%20meta;";// Not including route information
+			final String queryString = queryStringPrefix + "(way[\"building\"!~\".\"]" + boundingBoxString
+					+ ";>;relation[\"route\"]" + boundingBoxString + ";);out%20meta;";
 			System.out.println("Download URL is " + queryString);
 			// Download data
 			final String data = download(queryString);
@@ -132,24 +130,7 @@ public class GuiUtil {
 			monitor.lblDownloading.setVisible(false);
 			monitor.isDownloadingOSM = false;
 		}
-		
-		String getOverpassWithRoadType(String boundingBoxString) {
-			String string = "";
-			for (RoadType type : RoadType.values()) {
-				String typeString = type.name();
-				String segment = "(way[\"highway\"=\"";
-				if (typeString.equals("tram")) {
-					segment = "(way[\"railway\"=\"";
-				}
-				segment += typeString;
-				segment += "\"]";
-				segment += boundingBoxString;
-				segment += ";>;);";
-				string += segment;
-			}
-			return string;
-		}
-		
+
 		/**
 		 * Initialize output file
 		 */
@@ -160,7 +141,7 @@ public class GuiUtil {
 					outputFile.delete();
 				}
 				outputFile.createNewFile();
-				Settings.inputOpenStreetMapFile = outputFile.getPath();
+				settings.inputOpenStreetMapFile = outputFile.getPath();
 			} catch (final Exception e) {
 				e.printStackTrace();
 			}
@@ -173,7 +154,7 @@ public class GuiUtil {
 			BufferedWriter out;
 			try {
 				out = new BufferedWriter(
-						new OutputStreamWriter(new FileOutputStream(Settings.inputOpenStreetMapFile), "UTF-8"));
+						new OutputStreamWriter(new FileOutputStream(settings.inputOpenStreetMapFile), StandardCharsets.UTF_8));
 				out.write(str);
 				out.close();
 			} catch (final IOException e) {
@@ -191,7 +172,23 @@ public class GuiUtil {
 		return java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds().width;
 	}
 
-	
+	/*
+	 * Find the intersection point of two lines
+	 */
+	static Point lineIntersect(final int x1, final int y1, final int x2, final int y2, final int x3, final int y3,
+			final int x4, final int y4) {
+		final double denom = ((y4 - y3) * (x2 - x1)) - ((x4 - x3) * (y2 - y1));
+		if (denom == 0.0) { // Lines are parallel.
+			return null;
+		}
+		final double ua = (((x4 - x3) * (y1 - y3)) - ((y4 - y3) * (x1 - x3))) / denom;
+		final double ub = (((x2 - x1) * (y1 - y3)) - ((y2 - y1) * (x1 - x3))) / denom;
+		if ((ua >= 0.0f) && (ua <= 1.0f) && (ub >= 0.0f) && (ub <= 1.0f)) {
+			// Get the intersection point.
+			return new Point((int) (x1 + (ua * (x2 - x1))), (int) (y1 + (ua * (y2 - y1))));
+		}
+		return null;
+	}
 
 	public static void setEnabledStatusOfComponents(final Container container, final boolean status) {
 		final Component[] components = container.getComponents();

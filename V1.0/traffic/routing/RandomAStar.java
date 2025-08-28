@@ -69,7 +69,7 @@ public class RandomAStar extends Routing {
 
 	enum DijkstraVertexState {
 		Unvisited, Visited, None
-	};
+	}
 
 	ArrayList<DijkstraVertex> vertices = new ArrayList<>();
 
@@ -103,10 +103,8 @@ public class RandomAStar extends Routing {
 		}
 	}
 
-	public void computePathsFromTo(final Edge startEdge, final Edge endEdge, final VehicleType type) {
+	public void computePathsFromTo(Node sourceNode, Node destinationNode, final VehicleType type) {
 		// Reset
-		final Node sourceNode = startEdge.startNode;
-		final Node destinationNode = endEdge.endNode;
 		final double metersPerLongitude = RoadUtil
 				.getMetersPerLongitudeDegree((sourceNode.lon + destinationNode.lon) / 2);
 		for (final DijkstraVertex v : vertices) {
@@ -116,7 +114,7 @@ public class RandomAStar extends Routing {
 			v.state = DijkstraVertexState.None;
 			// Use simple approach to approximate distance
 			v.directDistanceToDestination = metersPerLongitude * Point2D.distance(sourceNode.lon,
-					sourceNode.lat * Settings.lonVsLat, destinationNode.lon, destinationNode.lat * Settings.lonVsLat);
+					sourceNode.lat * settings.lonVsLat, destinationNode.lon, destinationNode.lat * settings.lonVsLat);
 		}
 
 		final DijkstraVertex source = vertices.get(sourceNode.index);
@@ -137,7 +135,7 @@ public class RandomAStar extends Routing {
 
 			// Visit each edge exiting u
 			for (final DijkstraEdge e : u.adjacencies) {
-				if (!VehicleUtil.canGoThrough(u.node, e.target.node, type)) {
+				if (!VehicleUtil.canGoThrough(u.node, e.target.node, type, settings.isAllowPriorityVehicleUseTramTrack)) {
 					continue;
 				}
 				final DijkstraVertex v = e.target;
@@ -166,9 +164,9 @@ public class RandomAStar extends Routing {
 		}
 	}
 
-	public ArrayList<RouteLeg> createCompleteRoute(final Edge startEdge, final Edge endEdge, final VehicleType type) {
-		computePathsFromTo(startEdge, endEdge, type);
-		final List<DijkstraVertex> path = getPathTo(endEdge.endNode);
+	public ArrayList<RouteLeg> createCompleteRoute(Node start, Node end, final VehicleType type) {
+		computePathsFromTo(start, end, type);
+		final List<DijkstraVertex> path = getPathTo(end);
 		if (path.size() < 2) {
 			return null;
 		}
@@ -177,7 +175,6 @@ public class RandomAStar extends Routing {
 			final Edge edge = getEdgeFromVertices(path.get(i - 1), path.get(i));
 			legsOnRoute.add(new RouteLeg(edge, 0));
 		}
-		RouteUtil.removeRepeatSections(legsOnRoute);
 		return legsOnRoute;
 	}
 
@@ -192,8 +189,8 @@ public class RandomAStar extends Routing {
 
 	double getFlowDensity(final Edge edge) {
 		double numV = 0;
-		for (final Lane lane : edge.lanes) {
-			numV += lane.vehicles.size();
+		for (final Lane lane : edge.getLanes()) {
+			numV += lane.getVehicleCount();
 		}
 		return numV / edge.length;
 	}

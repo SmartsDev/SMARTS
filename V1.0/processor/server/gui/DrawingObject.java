@@ -1,6 +1,8 @@
 package processor.server.gui;
 
+import java.awt.geom.Point2D;
 import java.util.Comparator;
+import java.util.List;
 
 import traffic.road.RoadType;
 
@@ -14,10 +16,11 @@ public class DrawingObject {
 		boolean[] laneBlocks;
 		double length;
 		RoadType type;
+		List<LaneObject> lanes;
 
 		public EdgeObject(final double startNodeLon, final double startNodeLat, final double endNodeLon,
 				final double endNodeLat, final int index, final int numLanes, final String note, final double length,
-				final RoadType type) {
+				final RoadType type, List<LaneObject> lanes) {
 			super();
 			this.startNodeLon = startNodeLon;
 			this.startNodeLat = startNodeLat;
@@ -32,6 +35,7 @@ public class DrawingObject {
 			}
 			this.length = length;
 			this.type = type;
+			this.lanes = lanes;
 		}
 
 	}
@@ -42,6 +46,47 @@ public class DrawingObject {
 			return e1.index < e2.index ? -1 : e1.index == e2.index ? 0 : 1;
 		}
 	}
+
+	public static class LaneObject {
+		double latStart, lonStart, latEnd, lonEnd;
+		int index;
+
+		public LaneObject(double latStart, double lonStart, double latEnd, double lonEnd) {
+			this.latStart = latStart;
+			this.lonStart = lonStart;
+			this.latEnd = latEnd;
+			this.lonEnd = lonEnd;
+		}
+
+		public LaneObject(double latStart, double lonStart, double latEnd, double lonEnd, int index) {
+			this.latStart = latStart;
+			this.lonStart = lonStart;
+			this.latEnd = latEnd;
+			this.lonEnd = lonEnd;
+			this.index = index;
+		}
+
+		public void changeCoordinates(){
+			double temp = latStart;
+			latStart = latEnd;
+			latEnd = temp;
+
+			temp = lonStart;
+			lonStart = lonEnd;
+			lonEnd = temp;
+		}
+	}
+
+	public static class NodeObject{
+	    double lon,lat;
+	    List<Point2D> polygon;
+
+        public NodeObject(double lon, double lat, List<Point2D> polygon) {
+            this.lon = lon;
+            this.lat = lat;
+            this.polygon = polygon;
+        }
+    }
 
 	public static class IntersectionObject {
 		double lon, lat;

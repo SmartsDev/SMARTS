@@ -1,42 +1,22 @@
 package processor.server;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Scanner;
-import java.util.TreeMap;
+import java.util.List;
 import java.util.UUID;
 
 import common.Settings;
-import common.SysUtil;
-import osm.OSM;
+import processor.SimServerData;
+import processor.SimulationProcessor;
 import processor.communication.IncomingConnectionBuilder;
 import processor.communication.MessageHandler;
-import processor.communication.message.Message_SW_BlockLane;
-import processor.communication.message.Message_SW_ChangeSpeed;
-import processor.communication.message.Message_SW_KillWorker;
-import processor.communication.message.Message_SW_ServerBased_ShareTraffic;
-import processor.communication.message.Message_SW_ServerBased_Simulate;
-import processor.communication.message.Message_SW_Serverless_Pause;
-import processor.communication.message.Message_SW_Serverless_Resume;
-import processor.communication.message.Message_SW_Serverless_Start;
-import processor.communication.message.Message_SW_Serverless_Stop;
-import processor.communication.message.Message_SW_Setup;
-import processor.communication.message.Message_WS_Join;
-import processor.communication.message.Message_WS_TrafficReport;
-import processor.communication.message.SerializableRoute;
-import processor.communication.message.SerializableTravelTime;
-import processor.communication.message.Message_WS_ServerBased_SharedMyTrafficWithNeighbor;
-import processor.communication.message.Message_WS_Serverless_Complete;
-import processor.communication.message.Message_WS_SetupCreatingVehicles;
-import processor.communication.message.Message_WS_SetupDone;
-import processor.communication.message.Serializable_GPS_Rectangle;
-import processor.communication.message.Serializable_GUI_Vehicle;
-import processor.server.gui.GUI;
+import processor.communication.externalMessage.DemandBasedLaneManager;
+import processor.communication.externalMessage.ExternalSimulationListener;
+import processor.communication.externalMessage.LaneManager;
+import processor.communication.message.*;
+import traffic.network.ODDistributor;
 import traffic.road.Node;
 import traffic.road.RoadNetwork;
-import traffic.road.RoadUtil;
 
 /**
  * This class can do: 1) loading and distributing simulation configuration; 2)
@@ -46,62 +26,42 @@ import traffic.road.RoadUtil;
  * 
  * This class can be run as Java application.
  */
-public class Server implements MessageHandler, Runnable {
-	public RoadNetwork roadNetwork;
+public class Server implements MessageHandler, Runnable, SimulationProcessor {
 	ArrayList<WorkerMeta> workerMetas = new ArrayList<>();
-	int step = 0;// Time step in the current simulation
-	GUI gui;
-	FileOutput fileOutput = new FileOutput();
-	public boolean isSimulating = false;// Whether simulation is running, i.e.,
-										// it is not paused or stopped
-	int numInternalNonPubVehiclesAtAllWorkers = 0;
-	int numInternalTramsAtAllWorkers = 0;
-	int numInternalBusesAtAllWorkers = 0;
-	long timeStamp = 0;
-	double simulationWallTime = 0;// Total time length spent on simulation
-	ScriptLoader scriptLoader = new ScriptLoader();
-	int totalNumWwCommChannels = 0;// Total number of communication channels
-									// between workers. A worker has two
-									// channels with a neighbor worker, one for
-									// sending and one for receiving.
-	ArrayList<Node> nodesToAddLight = new ArrayList<>();
-	ArrayList<Node> nodesToRemoveLight = new ArrayList<>();
-	int numTrajectoriesReceived = 0;// Number of complete trajectories received
-									// from workers
-	int numVehiclesCreatedDuringSetup = 0;// For updating setup progress on GUI
-	int numVehiclesNeededAtStart = 0;// For updating setup progress on GUI
-	double aggregatedVehicleCountInOneSimulation = 0.0;
-	double aggregatedVehicleTravelSpeedInOneSimulation = 0.0;
-	Server server;
-	Scanner sc = new Scanner(System.in);
-	boolean isOpenForNewWorkers = true;
-	ArrayList<Message_WS_TrafficReport> receivedTrafficReportCache = new ArrayList<>();
-	ArrayList<SerializableRoute> routesForOutput = new ArrayList<SerializableRoute>();
-	HashMap<String, TreeMap<Double, double[]>> trajectoriesForOutput = new HashMap<String, TreeMap<Double, double[]>>();
-	HashMap<String, Double> travelTimesForOutput = new HashMap<String, Double>();
+	public boolean isSimulating = false;//Whether simulation is running, i.e., it is not paused or stopped
+	private boolean isOpenForNewWorkers = true;
+	private ArrayList<Message_WS_TrafficReport> receivedTrafficReportCache = new ArrayList<>();
+	private SimServerData data;
+	private Settings settings;
+	private ExternalSimulationListener extListner;
+	private int writeOutputStepInServerlessMode = 1;
 
-	public static void main(final String[] args) {
-		if (processCommandLineArguments(args)) {
-			new Server().run();
-		} else {
-			System.out
-					.println("There is an error in command line parameter. Program exits.");
-		}
+	public Server(boolean isVisualize){
+		this.settings = new Settings();
+		this.settings.isVisualize = isVisualize;
+		data = new SimServerData(settings);
+		extListner = settings.getExternalSimulationListener();
+		//extListner.init();
 	}
 
-	static boolean processCommandLineArguments(final String[] args) {
+	public static void main(final String[] args) {
+		boolean isVisualize = true;
+		boolean error = false;
 		try {
 			for (int i = 0; i < args.length; i++) {
 				switch (args[i]) {
-				case "-gui":
-					Settings.isVisualize = Boolean.parseBoolean(args[i + 1]);
-					break;
+					case "-gui":
+						isVisualize =  Boolean.parseBoolean(args[i + 1]);
 				}
 			}
 		} catch (final Exception e) {
-			return false;
+			error = true;
 		}
-		return true;
+		if (!error) {
+			new Server(isVisualize).run();
+		} else {
+			System.out.println("There is an error in command line parameter. Program exits.");
+		}
 	}
 
 	/**
@@ -109,29 +69,16 @@ public class Server implements MessageHandler, Runnable {
 	 * workers is reached.
 	 */
 	void addWorker(final Message_WS_Join received) {
-		final WorkerMeta worker = new WorkerMeta(received.workerName,
-				received.workerAddress, received.workerPort);
-		if (isAllWorkersAtState(WorkerState.NEW)
-				&& Settings.numWorkers > workerMetas.size()) {
+		final WorkerMeta worker = new WorkerMeta(received.workerName, received.workerAddress, received.workerPort);
+		if (isAllWorkersAtState(WorkerState.NEW) && settings.numWorkers > workerMetas.size()) {
 			workerMetas.add(worker);
-			System.out.println(workerMetas.size() + "/" + Settings.numWorkers
-					+ " workers connected.");
-			if (Settings.isVisualize) {
-				gui.updateNumConnectedWorkers(workerMetas.size());
-				if (workerMetas.size() == Settings.numWorkers) {
-					gui.getReadyToSetup();
-				}
-			} else {
-				if (workerMetas.size() == Settings.numWorkers) {
-					isOpenForNewWorkers = false;// No need for more workers
-					acceptSimScriptFromConsole();// Let user input simulation
-													// script path
-				}
-
+			data.showNumberOfConnectedWorkers(workerMetas.size());
+			if (workerMetas.size() == settings.numWorkers) {
+				isOpenForNewWorkers = false;// No need for more workers
+				data.prepareForSetup();
 			}
 		} else {
-			final Message_SW_KillWorker msd = new Message_SW_KillWorker(
-					Settings.isSharedJVM);
+			final Message_SW_KillWorker msd = new Message_SW_KillWorker(settings.isSharedJVM);
 			worker.send(msd);
 		}
 	}
@@ -140,9 +87,8 @@ public class Server implements MessageHandler, Runnable {
 	 * Start a server-less simulation.
 	 */
 	void askWorkersProceedWithoutServer() {
-		timeStamp = System.nanoTime();
-		final Message_SW_Serverless_Start message = new Message_SW_Serverless_Start(
-				step);
+		data.takeTimeStamp();
+		final Message_SW_Serverless_Start message = new Message_SW_Serverless_Start(data.getStep());
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(message);
 			worker.setState(WorkerState.SERVERLESS_WORKING);
@@ -156,17 +102,17 @@ public class Server implements MessageHandler, Runnable {
 	void askWorkersShareTrafficDataWithFellowWorkers() {
 
 		// Increment step
-		step++;
-		timeStamp = System.nanoTime();
+		data.setStep(data.getStep() + 1);
+		data.takeTimeStamp();
 
-		System.out.println("Doing step " + step);
+		System.out.println("Doing step " + data.getStep());
 
 		// Ask all workers to share data with fellow
 		for (final WorkerMeta worker : workerMetas) {
 			worker.setState(WorkerState.SHARING_STARTED);
 		}
 		for (final WorkerMeta worker : workerMetas) {
-			worker.send(new Message_SW_ServerBased_ShareTraffic(step));
+			worker.send(new Message_SW_ServerBased_ShareTraffic(data.getStep()));
 		}
 	}
 
@@ -176,61 +122,27 @@ public class Server implements MessageHandler, Runnable {
 	 * their neighbors in server-based simulation.
 	 */
 	synchronized void askWorkersSimulateOneStep() {
-		boolean isNewNonPubVehiclesAllowed = numInternalNonPubVehiclesAtAllWorkers < Settings.numGlobalRandomBackgroundPrivateVehicles ? true
-				: false;
-		boolean isNewTramsAllowed = numInternalTramsAtAllWorkers < Settings.numGlobalBackgroundRandomTrams ? true
-				: false;
-		boolean isNewBusesAllowed = numInternalBusesAtAllWorkers < Settings.numGlobalBackgroundRandomBuses ? true
-				: false;
-
-		// Clear one-step vehicle counts from last step
-		numInternalNonPubVehiclesAtAllWorkers = 0;
-		numInternalTramsAtAllWorkers = 0;
-		numInternalBusesAtAllWorkers = 0;
-
+		boolean[] req = data.updateVehicleCounts();
 		for (final WorkerMeta worker : workerMetas) {
 			worker.setState(WorkerState.SIMULATING);
 		}
-		final Message_SW_ServerBased_Simulate message = new Message_SW_ServerBased_Simulate(
-				isNewNonPubVehiclesAllowed, isNewTramsAllowed,
-				isNewBusesAllowed, UUID.randomUUID().toString());
+		final Message_SW_ServerBased_Simulate message = new Message_SW_ServerBased_Simulate(req[0],
+				req[1], req[2], UUID.randomUUID().toString());
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(message);
 		}
 	}
 
-	void buildGui() {
-		if (gui != null) {
-			gui.dispose();
-		}
-		final GUI newGUI = new GUI(this);
-		gui = newGUI;
-		gui.setVisible(true);
+	public void changeMap() {
+		data.changeMap();
+		//if (settings.isExternalListenerUsed) {
+		//	extListner.getRoadGraph(data.getRoadNetwork());
+		//}
 	}
 
-	public void changeMap() {
-		Settings.listRouteSourceWindowForInternalVehicle.clear();
-		Settings.listRouteDestinationWindowForInternalVehicle.clear();
-		Settings.listRouteSourceDestinationWindowForInternalVehicle.clear();
-		Settings.isNewEnvironment = true;
-
-		if (Settings.inputOpenStreetMapFile.length() > 0) {
-			final OSM osm = new OSM();
-			osm.processOSM(Settings.inputOpenStreetMapFile, true);
-			Settings.isBuiltinRoadGraph = false;
-			// Revert to built-in map if there was an error when converting new
-			// map
-			if (Settings.roadGraph.length() == 0) {
-				Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
-				Settings.isBuiltinRoadGraph = true;
-			}
-		} else {
-			Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
-			Settings.isBuiltinRoadGraph = true;
-		}
-
-		roadNetwork = new RoadNetwork();// Build road network based on new road
-										// graph
+	@Override
+	public void onClose() {
+		killConnectedWorkers();
 	}
 
 	/**
@@ -239,21 +151,11 @@ public class Server implements MessageHandler, Runnable {
 	 * no pause time between steps.
 	 */
 	public void changeSpeed(final int pauseTimeEachStep) {
-		Settings.pauseTimeBetweenStepsInMilliseconds = pauseTimeEachStep;
-		final Message_SW_ChangeSpeed message = new Message_SW_ChangeSpeed(
-				Settings.pauseTimeBetweenStepsInMilliseconds);
+		settings.pauseTimeBetweenStepsInMilliseconds = pauseTimeEachStep;
+		final Message_SW_ChangeSpeed message = new Message_SW_ChangeSpeed(settings.pauseTimeBetweenStepsInMilliseconds);
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(message);
 		}
-	}
-
-	public WorkerMeta getWorkerAtRouteStart(final Node routeStartNode) {
-		for (final WorkerMeta worker : workerMetas) {
-			if (worker.workarea.workCells.contains(routeStartNode.gridCell)) {
-				return worker;
-			}
-		}
-		return null;
 	}
 
 	boolean isAllWorkersAtState(final WorkerState state) {
@@ -264,29 +166,23 @@ public class Server implements MessageHandler, Runnable {
 			}
 		}
 
-		if (count == workerMetas.size()) {
-			return true;
-		} else {
-			return false;
-		}
+		return count == workerMetas.size();
 
 	}
 
 	public void killConnectedWorkers() {
-		final Message_SW_KillWorker msd = new Message_SW_KillWorker(
-				Settings.isSharedJVM);
+		final Message_SW_KillWorker msd = new Message_SW_KillWorker(settings.isSharedJVM);
 		for (final WorkerMeta worker : workerMetas) {
 			worker.send(msd);
 		}
 		workerMetas.clear();
-		Settings.isNewEnvironment = true;
+		settings.isNewEnvironment = true;
 	}
 
 	public void pauseSim() {
 		isSimulating = false;
-		if (!Settings.isServerBased) {
-			final Message_SW_Serverless_Pause message = new Message_SW_Serverless_Pause(
-					step);
+		if (!settings.isServerBased) {
+			final Message_SW_Serverless_Pause message = new Message_SW_Serverless_Pause(data.getStep());
 			for (final WorkerMeta worker : workerMetas) {
 				worker.send(message);
 			}
@@ -301,143 +197,28 @@ public class Server implements MessageHandler, Runnable {
 	@Override
 	synchronized public void processReceivedMsg(final Object message) {
 		if (message instanceof Message_WS_Join) {
-			if (isOpenForNewWorkers)
-				addWorker((Message_WS_Join) message);
+			onWSJoinMessage((Message_WS_Join) message);
 		} else if (message instanceof Message_WS_SetupCreatingVehicles) {
-			numVehiclesCreatedDuringSetup += ((Message_WS_SetupCreatingVehicles) message).numVehicles;
-
-			double createdVehicleRatio = (double) numVehiclesCreatedDuringSetup
-					/ numVehiclesNeededAtStart;
-			if (createdVehicleRatio > 1) {
-				createdVehicleRatio = 1;
-			}
-
-			if (Settings.isVisualize) {
-				gui.updateSetupProgress(createdVehicleRatio);
-			}
+			onWSSetupCreatingVehiclesMsg((Message_WS_SetupCreatingVehicles) message);
 		} else if (message instanceof Message_WS_SetupDone) {
-			updateWorkerState(((Message_WS_SetupDone) message).workerName,
-					WorkerState.READY);
-			totalNumWwCommChannels += (((Message_WS_SetupDone) message).numFellowWorkers);
-			if (isAllWorkersAtState(WorkerState.READY)) {
-				if (Settings.isVisualize) {
-					gui.stepToDraw = 0;
-				}
-				startSimulation();
-			}
+			onWSSetupDoneMsg((Message_WS_SetupDone) message);
 		} else if (message instanceof Message_WS_ServerBased_SharedMyTrafficWithNeighbor) {
-			if (!isSimulating) {
-				// No need to process the message if simulation was stopped
-				return;
-			}
-
-			Message_WS_ServerBased_SharedMyTrafficWithNeighbor messageToProcess = (Message_WS_ServerBased_SharedMyTrafficWithNeighbor) message;
-
-			for (final WorkerMeta w : workerMetas) {
-				if (w.name.equals(messageToProcess.workerName)
-						&& (w.state == WorkerState.SHARING_STARTED)) {
-					updateWorkerState(messageToProcess.workerName,
-							WorkerState.SHARED);
-					if (isAllWorkersAtState(WorkerState.SHARED)) {
-						askWorkersSimulateOneStep();
-					}
-					break;
-				}
-			}
-
+			onWSServerBasedShareMyTrafficWithNeighbourMsg((Message_WS_ServerBased_SharedMyTrafficWithNeighbor) message);
+			onWSServerBasedShareMyTrafficWithNeighbourMsg((Message_WS_ServerBased_SharedMyTrafficWithNeighbor) message);
 		} else if (message instanceof Message_WS_TrafficReport) {
-			if (!isSimulating) {
-				// No need to process the message if simulation was stopped
-				return;
-			}
-
-			final Message_WS_TrafficReport received = (Message_WS_TrafficReport) message;
-
-			// Cache received reports
-			receivedTrafficReportCache.add(received);
-
-			// Output data from the reports
-			processCachedReceivedTrafficReports();
-
-			// Stop if max number of steps is reached in server-based mode
-			if (Settings.isServerBased) {
-				updateWorkerState(received.workerName,
-						WorkerState.FINISHED_ONE_STEP);
-				if (isAllWorkersAtState(WorkerState.FINISHED_ONE_STEP)) {
-					updateSimulationTime();
-					if (step >= Settings.maxNumSteps) {
-						stopSim();
-					} else if (isSimulating) {
-						askWorkersShareTrafficDataWithFellowWorkers();
-					}
-				}
-			} else {
-				// Update time step in server-less mode
-				if (received.step > step) {
-					step = received.step;
-				}
-			}
+			onWSTrafficReportMsg((Message_WS_TrafficReport) message);
 		} else if (message instanceof Message_WS_Serverless_Complete) {
-			if (!isSimulating) {
-				// No need to process the message if simulation was stopped
-				return;
-			}
-			final Message_WS_Serverless_Complete received = (Message_WS_Serverless_Complete) message;
-			if (received.step > step) {
-				step = received.step;
-			}
-
-			updateWorkerState(received.workerName, WorkerState.NEW);
-
-			if (isAllWorkersAtState(WorkerState.NEW)) {
-				updateSimulationTime();
-				stopSim();
-			}
+			onWSServerlessCompleteMsg((Message_WS_Serverless_Complete) message);
 		}
 	}
 
 	synchronized void processCachedReceivedTrafficReports() {
-		final Iterator<Message_WS_TrafficReport> iMessage = receivedTrafficReportCache
-				.iterator();
+		final Iterator<Message_WS_TrafficReport> iMessage = receivedTrafficReportCache.iterator();
 		while (iMessage.hasNext()) {
 			final Message_WS_TrafficReport message = iMessage.next();
-			// Update GUI
-			if (Settings.isVisualize) {
-				gui.updateObjectData(message.vehicles, message.trafficLights,
-						message.workerName, workerMetas.size(), message.step);
-			}
-			// Build trajectories of vehicles based on the vehicle list
-			if (Settings.outputTrajectoryScope != DataOutputScope.NONE) {
-				double timeStamp = message.step / Settings.numStepsPerSecond;
-				for (Serializable_GUI_Vehicle vehicle : message.vehicles) {
-					if (Settings.outputTrajectoryScope == DataOutputScope.ALL
-							|| (vehicle.isForeground && Settings.outputTrajectoryScope == DataOutputScope.FOREGROUND)
-							|| (!vehicle.isForeground && Settings.outputTrajectoryScope == DataOutputScope.BACKGROUND)) {
-						String key = vehicle.id + "_" + vehicle.type;
-						if (!trajectoriesForOutput.containsKey(key)) {
-							trajectoriesForOutput.put(key,
-									new TreeMap<Double, double[]>());
-						}
-						trajectoriesForOutput.get(key)
-								.put(timeStamp,
-										new double[] { vehicle.latHead,
-												vehicle.lonHead });
-					}
-				}
-			}
-			// Aggregate vehicle count and travel speed
-			aggregatedVehicleCountInOneSimulation += message.totalNumVehicles;
-			aggregatedVehicleTravelSpeedInOneSimulation += message.aggregatedTravelSpeedValues;
-			// Store routes of new vehicles created since last report
-			routesForOutput.addAll(message.newRoutesSinceLastReport);
-			// Update for travel time output
-			for (SerializableTravelTime record : message.travelTimes) {
-				travelTimesForOutput.put(record.ID, record.travelTime);
-			}
-			// Increment vehicle counts
-			numInternalNonPubVehiclesAtAllWorkers += message.numInternalNonPubVehicles;
-			numInternalTramsAtAllWorkers += message.numInternalTrams;
-			numInternalBusesAtAllWorkers += message.numInternalBuses;
+			data.updateFromReport(message.vehicleList, message.lightList, message.workerName, workerMetas.size(),
+					message.step, message.randomRoutes, message.finishedList,message.numInternalNonPubVehicles, message.numInternalTrams,
+					message.numInternalBuses, message.laneIndexes, message.edgesToUpdate);
 			// Remove processed message
 			iMessage.remove();
 		}
@@ -445,86 +226,21 @@ public class Server implements MessageHandler, Runnable {
 
 	@Override
 	public void run() {
-		// Load default road network
-		Settings.roadGraph = RoadUtil.importBuiltinRoadGraphFile();
-		roadNetwork = new RoadNetwork();
-
-		// Start GUI or load simulation configuration without GUI
-		if (Settings.isVisualize) {
-			buildGui();
-		} else {
-			acceptInitialConfigFromConsole();
-		}
-
+		data.initRoadNetwork();
+		changeMap();
+		data.initUIs(this);
 		// Prepare to receive connection request from workers
-		new IncomingConnectionBuilder(Settings.serverListeningPortForWorkers,
-				this).start();
-	}
-
-	void acceptInitialConfigFromConsole() {
-		// Let user input number of workers
-		System.out.println("Please specify the number of workers.");
-		Settings.numWorkers = Integer.parseInt(sc.nextLine());
-		while (Settings.numWorkers <= 0) {
-			System.out.println("Please specify the number of workers.");
-			Settings.numWorkers = Integer.parseInt(sc.nextLine());
-		}
-		// Kill all connected workers
-		killConnectedWorkers();
-		// Inform user next step
-		System.out.println("Please launch workers now.");
-	}
-
-	void acceptSimStartCommandFromConsole() {
-		System.out.println("Ready to simulate. Start (y/n)?");
-		String choice = sc.nextLine();
-		if (choice.equals("y") || choice.equals("Y")) {
-			startSimulationFromLoadedScript();
-		} else if (choice.equals("n") || choice.equals("N")) {
-			System.out.println("Quit system.");
-			killConnectedWorkers();
-			System.exit(0);
-		} else {
-			System.out.println("Ready to simulate. Start (y/n)?");
-		}
-	}
-
-	void acceptConsoleCommandAtSimEnd() {
-		System.out.println("Simulations are completed. Exit (y/n)?");
-		String choice = sc.nextLine();
-		if (choice.equals("y") || choice.equals("Y")) {
-			// Kill all connected workers
-			System.out.println("Quit system.");
-			killConnectedWorkers();
-			System.exit(0);
-		} else if (choice.equals("n") || choice.equals("N")) {
-			acceptSimScriptFromConsole();
-		} else {
-			System.out.println("Simulations are completed. Exit (y/n)?");
-		}
-	}
-
-	void acceptSimScriptFromConsole() {
-		System.out.println("Please specify the simulation script path.");
-		Settings.inputSimulationScript = sc.nextLine();
-		while (!scriptLoader.loadScriptFile()) {
-			System.out.println("Please specify the simulation script path.");
-			Settings.inputSimulationScript = sc.nextLine();
-		}
-		if (workerMetas.size() == Settings.numWorkers) {
-			acceptSimStartCommandFromConsole();
-		}
+		new IncomingConnectionBuilder(settings.serverListeningPortForWorkers, this).start();
 	}
 
 	public void resumeSim() {
 		isSimulating = true;
-		if (Settings.isServerBased) {
+		if (settings.isServerBased) {
 			System.out.println("Resuming server-based simulation...");
 			askWorkersShareTrafficDataWithFellowWorkers();
 		} else {
 			System.out.println("Resuming server-less simulation...");
-			final Message_SW_Serverless_Resume message = new Message_SW_Serverless_Resume(
-					step);
+			final Message_SW_Serverless_Resume message = new Message_SW_Serverless_Resume(data.getStep());
 			for (final WorkerMeta worker : workerMetas) {
 				worker.send(message);
 			}
@@ -536,14 +252,7 @@ public class Server implements MessageHandler, Runnable {
 	 * removed. The lists will be sent to worker during setup.
 	 */
 	public void setLightChangeNode(final Node node) {
-		node.light = !node.light;
-		nodesToAddLight.remove(node);
-		nodesToRemoveLight.remove(node);
-		if (node.light) {
-			nodesToAddLight.add(node);
-		} else {
-			nodesToRemoveLight.add(node);
-		}
+		data.setLightChangeNode(node);
 	}
 
 	/**
@@ -552,59 +261,50 @@ public class Server implements MessageHandler, Runnable {
 	 * configuration.
 	 */
 	public void setupNewSim() {
-		// Reset temporary variables
-		simulationWallTime = 0;
-		step = 0;
-		totalNumWwCommChannels = 0;
-		numTrajectoriesReceived = 0;
-		numVehiclesCreatedDuringSetup = 0;
-		numVehiclesNeededAtStart = 0;
+		data.resetVariablesForSetup();
 		receivedTrafficReportCache.clear();
-		aggregatedVehicleCountInOneSimulation = 0.0;
-		aggregatedVehicleTravelSpeedInOneSimulation = 0.0;
 
-		// Reset worker status
-		for (final WorkerMeta worker : workerMetas) {
-			worker.setState(WorkerState.NEW);
-		}
-
+		if (settings.isVisualize == false) data.loadSettingsFromScript();
+		//data.initRoadNetwork();
+		//data.updateSettings();
 		// In a new environment (map), determine the work areas for all workers
-		if (Settings.isNewEnvironment) {
-			roadNetwork.buildGrid();
-			WorkloadBalancer.partitionGridCells(workerMetas, roadNetwork);
+		if (settings.isNewEnvironment) {
+				changeMap();
 		}
+		data.initFileOutput();
+		assignODWindows();
+		final RouteLoader routeLoader = new RouteLoader(data.getRoadNetwork());
+		List<SerializableExternalVehicle> vehicleList = routeLoader.loadRoutes(settings.inputForegroundVehicleFile, settings.inputBackgroundVehicleFile);
+		data.updateNoOfVehiclesNeededAtStart(routeLoader.vehicles.size());
 
-		// Determine the number of internal vehicles at all workers
-		WorkloadBalancer.assignNumInternalVehiclesToWorkers(workerMetas,
-				roadNetwork);
 
-		// Assign vehicle routes from external file to workers
-		final RouteLoader routeLoader = new RouteLoader(this, workerMetas);
-		routeLoader.loadRoutes();
+		WorkloadBalancer workloadBalancer = new WorkloadBalancer(workerMetas, data.getRoadNetwork());
+		workloadBalancer.balanceLoad(settings, data.getStep(), vehicleList, data.getNodesToAddLight(), data.getNodesToRemoveLight());
 
-		// Get number of vehicles needed
-		numVehiclesNeededAtStart = routeLoader.vehicles.size()
-				+ Settings.numGlobalRandomBackgroundPrivateVehicles
-				+ Settings.numGlobalBackgroundRandomTrams
-				+ Settings.numGlobalBackgroundRandomBuses;
 
-		// Prepare compressed road graph information
-		String compressedRoadGraph = SysUtil.compressString(Settings.roadGraph);
+		settings.isNewEnvironment = false;
+	}
 
-		// Send simulation configuration to workers
-		for (final WorkerMeta worker : workerMetas) {
-			worker.send(new Message_SW_Setup(workerMetas, worker,
-					roadNetwork.edges, step, nodesToAddLight,
-					nodesToRemoveLight, compressedRoadGraph));
-		}
+	private void assignODWindows(){
+		ODDistributor odDistributor = settings.getODDistributor();
+		settings.listRouteSourceWindowForInternalVehicle = odDistributor.getSourceWidows(getRoadNetwork());
+		settings.listRouteDestinationWindowForInternalVehicle = odDistributor.getDestinationWidows(getRoadNetwork());
+		settings.listRouteSourceDestinationWindowForInternalVehicle = odDistributor.getSourceDestinationWidows(getRoadNetwork());
+	}
 
-		// Initialize output
-		fileOutput.init();
+	@Override
+	public void setupMultipleSim() {
+		data.startMultipleExperimentRunning();
+	}
 
-		Settings.isNewEnvironment = false;
+	@Override
+	public boolean loadScript() {
+		return data.loadScript();
+	}
 
-		System.out.println("Sent simulation configuration to all workers.");
-
+	@Override
+	public Settings getSettings() {
+		return settings;
 	}
 
 	public void askWorkersChangeLaneBlock(int laneIndex, boolean isBlocked) {
@@ -613,14 +313,19 @@ public class Server implements MessageHandler, Runnable {
 		}
 	}
 
+	public void askWorkersChangeLaneDirection(int edgeIndex) {
+
+		for (final WorkerMeta worker : workerMetas) {
+			worker.send(new Message_SW_ChangeLaneDirection(edgeIndex));
+		}
+	}
+
 	void startSimulation() {
-		if (step < Settings.maxNumSteps) {
+		if (data.getStep() < settings.maxNumSteps) {
 			System.out.println("All workers are ready to do simulation.");
 			isSimulating = true;
-			if (Settings.isVisualize) {
-				gui.startSimulation();
-			}
-			if (Settings.isServerBased) {
+			data.startSimulationInUI();
+			if (settings.isServerBased) {
 				System.out.println("Starting server-based simulation...");
 				askWorkersShareTrafficDataWithFellowWorkers();
 			} else {
@@ -631,40 +336,20 @@ public class Server implements MessageHandler, Runnable {
 
 	}
 
-	void startSimulationFromLoadedScript() {
-		if (scriptLoader.retrieveOneSimulationSetup()) {
-			changeMap();
-		}
-		setupNewSim();
+	@Override
+	public RoadNetwork getRoadNetwork() {
+		return data.getRoadNetwork();
 	}
 
 	public void stopSim() {
 		isSimulating = false;
-		numInternalNonPubVehiclesAtAllWorkers = 0;
-		numInternalTramsAtAllWorkers = 0;
-		numInternalBusesAtAllWorkers = 0;
-		nodesToAddLight.clear();
-		nodesToRemoveLight.clear();
+		data.reserVariablesAtStop();
 		processCachedReceivedTrafficReports();
-		fileOutput.outputSimLog(step, simulationWallTime,
-				totalNumWwCommChannels, aggregatedVehicleCountInOneSimulation,
-				aggregatedVehicleTravelSpeedInOneSimulation);
-		aggregatedVehicleCountInOneSimulation = 0.0;
-		aggregatedVehicleTravelSpeedInOneSimulation = 0.0;
-		fileOutput.outputRoutes(routesForOutput);
-		routesForOutput.clear();
-		fileOutput.outputTrajectories(trajectoriesForOutput);
-		trajectoriesForOutput.clear();
-		fileOutput.outputTravelTime(travelTimesForOutput);
-		travelTimesForOutput.clear();
-		fileOutput.close();
+		data.writeOutputFiles(data.getStep());
 
-		// Ask workers stop in server-less mode. Note that workers may already
-		// stopped
-		// before receiving the message.
-		if (!Settings.isServerBased) {
-			final Message_SW_Serverless_Stop message = new Message_SW_Serverless_Stop(
-					step);
+		// Ask workers stop in server-less mode. Note that workers may already stopped before receiving the message.
+		if (!settings.isServerBased) {
+			final Message_SW_Serverless_Stop message = new Message_SW_Serverless_Stop(data.getStep());
 			for (final WorkerMeta worker : workerMetas) {
 				worker.send(message);
 				worker.setState(WorkerState.NEW);
@@ -672,31 +357,14 @@ public class Server implements MessageHandler, Runnable {
 		}
 
 		System.out.println("Simulation stopped.\n");
-
-		if ((Settings.isVisualize)) {
-			if (workerMetas.size() == Settings.numWorkers) {
-				gui.getReadyToSetup();
-			}
-		} else {
-			if (scriptLoader.isEmpty()) {
-				acceptConsoleCommandAtSimEnd();
-			} else {
-				System.out
-						.println("Loading configuration of new simulation...");
-				startSimulationFromLoadedScript();
-			}
-		}
+		//if (workerMetas.size() == settings.numWorkers) {
+		//	data.prepareForSetupAgain();
+		//}
 	}
 
-	/**
-	 * Updates wall time spent on simulation.
-	 */
-	synchronized void updateSimulationTime() {
-		simulationWallTime += (double) (System.nanoTime() - timeStamp) / 1000000000;
-	}
 
-	synchronized void updateWorkerState(final String workerName,
-			final WorkerState state) {
+
+	synchronized void updateWorkerState(final String workerName, final WorkerState state) {
 		for (final WorkerMeta worker : workerMetas) {
 			if (worker.name.equals(workerName)) {
 				worker.state = state;
@@ -704,4 +372,101 @@ public class Server implements MessageHandler, Runnable {
 			}
 		}
 	}
+
+	private void onWSJoinMessage(Message_WS_Join msg){
+		if (isOpenForNewWorkers)
+			addWorker(msg);
+	}
+
+	private void onWSSetupCreatingVehiclesMsg(Message_WS_SetupCreatingVehicles msg){
+		data.updateSetupprogressInUI((msg).numVehicles);
+	}
+
+	private void onWSSetupDoneMsg(Message_WS_SetupDone msg){
+		updateWorkerState((msg).workerName, WorkerState.READY);
+		data.updateChannelCount((msg).numFellowWorkers);
+		if (isAllWorkersAtState(WorkerState.READY)) {
+			data.resetStepInUI();
+			startSimulation();
+		}
+	}
+
+	private void onWSServerBasedShareMyTrafficWithNeighbourMsg(Message_WS_ServerBased_SharedMyTrafficWithNeighbor msg){
+		if (!isSimulating) {
+			// No need to process the message if simulation was stopped
+			return;
+		}
+		for (final WorkerMeta w : workerMetas) {
+			if (w.name.equals(msg.workerName) && (w.state == WorkerState.SHARING_STARTED)) {
+				updateWorkerState(msg.workerName, WorkerState.SHARED);
+				if (isAllWorkersAtState(WorkerState.SHARED)) {
+
+					//if (data.getStep()%18000 == 0 & data.getStep() > 0){
+					//	data.startReLogging();
+					//}
+					askWorkersSimulateOneStep();
+				}
+				break;
+			}
+		}
+	}
+
+	private void onWSTrafficReportMsg(Message_WS_TrafficReport msg){
+		if (!isSimulating) {
+			// No need to process the message if simulation was stopped
+			return;
+		}
+
+		// process and send the data to external
+
+
+		// Cache received reports
+		receivedTrafficReportCache.add(msg);
+		// Output data from the reports
+		processCachedReceivedTrafficReports();
+		// Stop if max number of steps is reached in server-based mode
+		if (settings.isServerBased) {
+			updateWorkerState(msg.workerName, WorkerState.FINISHED_ONE_STEP);
+			if (isAllWorkersAtState(WorkerState.FINISHED_ONE_STEP)) {
+				data.updateSimulationTime();
+				if (data.isSimulationStopReached()) {
+					stopSim();
+				} else if (isSimulating) {
+					askWorkersShareTrafficDataWithFellowWorkers();
+				}
+			}
+		} else {
+			// Update time step in server-less mode
+			if (msg.step > data.getStep()) {
+				data.setStep(msg.step);
+				//if ( data.getStep()/18000 > writeOutputStepInServerlessMode ){
+				//	System.out.println("Start re-write logs.. ");
+				//	writeOutputStepInServerlessMode++;
+				//	data.startReLogging();
+				//	System.out.println("Logging done");
+				//}
+			}
+		}
+	}
+
+	private void onWSServerlessCompleteMsg(Message_WS_Serverless_Complete msg){
+		if (!isSimulating) {
+			// No need to process the message if simulation was stopped
+			return;
+		}
+		if (msg.step > data.getStep()) {
+			data.setStep(msg.step);
+		}
+		updateWorkerState(msg.workerName, WorkerState.NEW);
+		if (isAllWorkersAtState(WorkerState.NEW)) {
+			data.updateSimulationTime();
+			stopSim();
+		}
+	}
+
+	private void sendTrafficReportToListner(Message_WS_TrafficReport trafficReport){
+		extListner.getMessage(trafficReport);
+	}
+
+
 }

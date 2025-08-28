@@ -1,16 +1,6 @@
 package processor.server.gui;
 
-import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Desktop;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Point;
-import java.awt.Rectangle;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
@@ -20,21 +10,10 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Random;
+import java.util.*;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
@@ -44,7 +23,6 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.border.BevelBorder;
@@ -52,10 +30,12 @@ import javax.swing.event.MouseInputAdapter;
 
 import common.Settings;
 import common.SysUtil;
+import processor.SimulationProcessor;
 import processor.communication.message.Serializable_GUI_Light;
 import processor.communication.message.Serializable_GUI_Vehicle;
 import processor.server.Server;
 import processor.server.gui.DrawingObject.EdgeObject;
+import processor.server.gui.DrawingObject.LaneObject;
 import processor.server.gui.DrawingObject.EdgeObjectComparator;
 import processor.server.gui.DrawingObject.IntersectionObject;
 import processor.server.gui.DrawingObject.TramStopObject;
@@ -66,6 +46,8 @@ import traffic.road.Node;
 import traffic.road.RoadNetwork;
 import traffic.road.RoadUtil;
 import traffic.vehicle.VehicleType;
+
+import static processor.server.gui.GUI.VehicleDetailType.Slowdown_Factor;
 
 /**
  * Panel that shows moving vehicles on map.
@@ -89,15 +71,14 @@ public class MonitorPanel extends JPanel {
 		public void mouseClicked(final MouseEvent e) {
 			final Point mousePoint = e.getPoint();
 			// Single click left button to select road
-			if ((e.getClickCount() == 1)
-					&& ((e.getModifiers() & InputEvent.BUTTON1_MASK) == InputEvent.BUTTON1_MASK)) {
-				// Popup menu (note menu opens at current mouse point, not
-				// reversed point)
+			if ((e.getClickCount() == 1) && ((e.getModifiers() & InputEvent.BUTTON1_MASK) == InputEvent.BUTTON1_MASK)) {
+				// Popup menu (note menu opens at current mouse point, not reversed point)
 				if (sdWindowAtMousePoint != null) {
 					showPopupMenu("setup", e.getPoint().x, e.getPoint().y);
+				} else if (laneAtMousePoint != null){
+					showPopupMenu("intersection", e.getPoint().x, e.getPoint().y);
 				} else if (roadIntersectionAtMousePoint != null) {
-					showPopupMenu("intersection", e.getPoint().x,
-							e.getPoint().y);
+					showPopupMenu("intersection", e.getPoint().x, e.getPoint().y);
 				} else if (roadEdgeAtMousePoint != null) {
 					showPopupMenu("edge", e.getPoint().x, e.getPoint().y);
 				} else {
@@ -144,22 +125,19 @@ public class MonitorPanel extends JPanel {
 					if (currentZoom >= minZoomExceptStaticMapImage) {
 						final Point mousePoint = e.getPoint();
 						if (mousePoint != null) {
-							queryWindowBottomRight = new Point2D.Double(
-									convertXToLon(mousePoint.x),
+							queryWindowBottomRight = new Point2D.Double(convertXToLon(mousePoint.x),
 									convertYToLat(mousePoint.y));
 							/*
 							 * Prepare overlay image
 							 */
 							prepareOverlayImage();
-							preparePlaceNameImage();
 							/*
 							 * Repaint
 							 */
 							repaint();
 						}
 					} else {
-						lblNeedToZoom
-								.setText("You need to zoom in further to draw query window");
+						lblNeedToZoom.setText("You need to zoom in further to draw query window");
 						lblNeedToZoom.setVisible(true);
 					}
 				}
@@ -181,12 +159,11 @@ public class MonitorPanel extends JPanel {
 
 				findEdgeAtMousePoint(mousePoint);
 				findSdWindowAtMousePoint(mousePoint);
-
+				findLaneAreaAtMousePoint(mousePoint);
 				/*
 				 * Prepare overlay image.
 				 */
 				prepareOverlayImage();
-				preparePlaceNameImage();
 				/*
 				 * Repaint
 				 */
@@ -199,9 +176,7 @@ public class MonitorPanel extends JPanel {
 			// Left button pressed...
 			if ((e.getModifiers() & InputEvent.BUTTON1_MASK) == InputEvent.BUTTON1_MASK) {
 				if (currentZoom >= minZoomExceptStaticMapImage) {
-					queryWindowTopLeft = new Point2D.Double(
-							convertXToLon(mousePoint.x),
-							convertYToLat(mousePoint.y));
+					queryWindowTopLeft = new Point2D.Double(convertXToLon(mousePoint.x), convertYToLat(mousePoint.y));
 					queryWindowBottomRight = null;
 				}
 			}
@@ -214,19 +189,16 @@ public class MonitorPanel extends JPanel {
 				/*
 				 * Set query window.
 				 */
-				if ((currentZoom >= minZoomExceptStaticMapImage)
-						&& validateQueryWindow()) {
+				if ((currentZoom >= minZoomExceptStaticMapImage) && validateQueryWindow()) {
 					statisticLabel.setVisible(true);
-					guiStatistic.setQueryWindow(queryWindowTopLeft,
-							queryWindowBottomRight);
+					guiStatistic.setQueryWindow(queryWindowTopLeft, queryWindowBottomRight);
 					guiStatistic.resetStatistics();
 					guiStatistic.getNumEdges(edgeObjects);
 					guiStatistic.setVehicleData(vehicleObjects);
 					guiStatistic.calculateAverageSpeed();
 					statisticLabel.setText(guiStatistic.getResult());
 					if (!controlPanel.isDuringSimulation) {
-						// Show setup menu after user define query window by
-						// dragging mouse
+						// Show setup menu after user define query window by dragging mouse
 						showPopupMenu("setup", e.getPoint().x, e.getPoint().y);
 					}
 				} else {
@@ -241,7 +213,6 @@ public class MonitorPanel extends JPanel {
 				 * Prepare overlay image
 				 */
 				prepareOverlayImage();
-				preparePlaceNameImage();
 				/*
 				 * Repaint
 				 */
@@ -251,8 +222,7 @@ public class MonitorPanel extends JPanel {
 				/*
 				 * Update positions
 				 */
-				moveMapCenterToPoint(e.getPoint().x - mousePoint.x,
-						e.getPoint().y - mousePoint.y);
+				moveMapCenterToPoint(e.getPoint().x - mousePoint.x, e.getPoint().y - mousePoint.y);
 
 			}
 			/*
@@ -305,21 +275,22 @@ public class MonitorPanel extends JPanel {
 		normal, mousePoint
 	}
 
-	Server server;
+	SimulationProcessor processor;
 	GUI gui;
 	public GuiStatistic guiStatistic;
 	public Dimension displayPanelDimension;
+	int maxPanelWidthHeight = 900;
 	double mapWidthInLonDegree, mapHeightInLonDegree;
 	double minLat, maxLat, minLon, maxLon;
 	ArrayList<Serializable_GUI_Vehicle> vehicleObjects = new ArrayList<>();
 	ArrayList<Serializable_GUI_Light> lightObjects = new ArrayList<>();
 	ArrayList<EdgeObject> edgeObjects = new ArrayList<>(300000);
-	ArrayList<TramStopObject> tramStopObjects = new ArrayList<>(3000);;
+	List<DrawingObject.NodeObject> nodeObjects = new ArrayList<>();
+	ArrayList<TramStopObject> tramStopObjects = new ArrayList<>(3000);
 	Point2D.Double queryWindowTopLeft = null, queryWindowBottomRight = null;
 	boolean isReceivingData = false;
 	boolean isComposingObjectImage = false;
-	double offset_MapAreaToDisplayPanel_TopLeftX = 0,
-			offset_MapAreaToDisplayPanel_TopLeftY = 0;
+	double offset_MapAreaToDisplayPanel_TopLeftX = 0, offset_MapAreaToDisplayPanel_TopLeftY = 0;
 	int offsetImageTopLeftX = 0, offsetImageTopLeftY = 0;
 	int offsetStaticMapImageTopLeftX = 0, offsetStaticMapImageTopLeftY = 0;
 	Point mousePoint = new Point(0, 0);
@@ -329,16 +300,10 @@ public class MonitorPanel extends JPanel {
 	 */
 	double mapAreaWidthInPixels = 1, mapAreaHeightInPixels = 1;
 	double mapAreaWidthInPixelsOld = 1, mapAreaHeightInPixelsOld = 1;
-	BufferedImage roadNetworkImage = new BufferedImage(1, 1,
-			BufferedImage.TYPE_INT_ARGB);
-	BufferedImage staticMapImage = new BufferedImage(1, 1,
-			BufferedImage.TYPE_INT_ARGB);
-	BufferedImage placeNameImage = new BufferedImage(1, 1,
-			BufferedImage.TYPE_INT_ARGB);
-	BufferedImage objectsImage = new BufferedImage(1, 1,
-			BufferedImage.TYPE_INT_ARGB);
-	BufferedImage overlayImage = new BufferedImage(1, 1,
-			BufferedImage.TYPE_INT_ARGB);
+	BufferedImage roadNetworkImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+	BufferedImage staticMapImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+	BufferedImage objectsImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+	BufferedImage overlayImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
 	HashMap<Integer, EdgeObject> roadEdgesWithBlockingSign = new HashMap<>();
 	boolean roadNetworkOn = true;
 	boolean vehicleDetailOn = false;
@@ -353,20 +318,15 @@ public class MonitorPanel extends JPanel {
 	String staticMapImageProvider = "OpenStreetMap"; // Check max zoom scale!
 	OpenStreetMapTile openStreetMapTile = new OpenStreetMapTile();
 	boolean staticMapImageOn = false;
-	boolean isShowPlaceNames = false;
 	int maxZoomStaticMapImage = 19;// OpenStreetMap:19
 	int minZoomStaticMapImage = 5;
-	int zoomAtRelocation = 7;
+	int zoomAtRelocation = 9;
 	int maxZoomExceptStaticMapImage = 22;
-	int minZoomExceptStaticMapImage = 7;
+	int minZoomExceptStaticMapImage = 8;
 	int currentZoom = 16;
 	boolean needNewStaticMapImage = false;
 	boolean isLoadingStaticMapImage = false;
-	int numTilesNeededForStaticMapImage = 0;
-	int numTilesDownloadedForCurrentStaticMapImage = 0;
 	boolean isDownloadingOSM = false;
-	boolean isDownloadingPlaceName = false;
-	HashMap<String, BufferedImage> OsmTileCache = new HashMap<String, BufferedImage>();
 
 	boolean isUseTrafficFlowToReplaceVehicle = false;
 	/*
@@ -382,6 +342,12 @@ public class MonitorPanel extends JPanel {
 	 * Road edge at mouse point.
 	 */
 	EdgeObject roadEdgeAtMousePoint = null;
+
+	/*
+	 * Lane at mouse point
+	 */
+
+	LaneObject laneAtMousePoint = null;
 
 	/*
 	 * Road intersection at mouse point
@@ -406,30 +372,26 @@ public class MonitorPanel extends JPanel {
 	 * Label showing download progress
 	 */
 	JLabel lblDownloading;
-	JLabel lblPlaceNameDownloading;
 
 	JLabel lblSetupProgress;
 
 	Random random = new Random();
+	private Settings settings;
 
-	// Place names around the world
-	HashMap<String, Places[][]> placesAroundWorld = buildPlaceNameDB();
-
-	private final JLabel lblOsmAttr;
-
-	public MonitorPanel(final Server server, final GUI gui,
-			final GuiStatistic qDialog, final Dimension displayPanelDimension) {
+	public MonitorPanel(SimulationProcessor processor, final GUI gui, final GuiStatistic qDialog,
+						final Dimension displayPanelDimension) {
 		setBackground(Color.WHITE);
-		this.server = server;
+		this.processor = processor;
+		this.settings = processor.getSettings();
 		this.gui = gui;
 		this.guiStatistic = qDialog;
-		this.minLon = server.roadNetwork.minLon;
-		this.minLat = server.roadNetwork.minLat;
-		this.maxLon = server.roadNetwork.maxLon;
-		this.maxLat = server.roadNetwork.maxLat;
+		RoadNetwork roadNetwork = processor.getRoadNetwork();
+		this.minLon = roadNetwork.minLon;
+		this.minLat = roadNetwork.minLat;
+		this.maxLon = roadNetwork.maxLon;
+		this.maxLat = roadNetwork.maxLat;
 		this.displayPanelDimension = displayPanelDimension;
-		this.setBounds(0, 0, displayPanelDimension.width,
-				displayPanelDimension.height);
+		this.setBounds(0, 0, displayPanelDimension.width, displayPanelDimension.height);
 		setLayout(null);
 
 		/*
@@ -448,7 +410,7 @@ public class MonitorPanel extends JPanel {
 		 * Map area dimension
 		 */
 		mapWidthInLonDegree = Math.abs(maxLon - minLon);
-		mapHeightInLonDegree = Math.abs(maxLat - minLat) * Settings.lonVsLat;
+		mapHeightInLonDegree = Math.abs(maxLat - minLat) * settings.lonVsLat;
 		/*
 		 * Size of map area in pixels
 		 */
@@ -475,8 +437,7 @@ public class MonitorPanel extends JPanel {
 		statisticLabel.setHorizontalAlignment(SwingConstants.LEFT);
 		statisticLabel.setForeground(Color.black);
 		statisticLabel.setFont(new Font("Tahoma", Font.PLAIN, 17));
-		statisticLabel
-				.setBounds(10, displayPanelDimension.height - 70, 500, 30);
+		statisticLabel.setBounds(10, displayPanelDimension.height - 70, 500, 30);
 		statisticLabel.setPreferredSize(new Dimension(300, 30));
 		add(statisticLabel);
 		statisticLabel.setVisible(false);
@@ -487,8 +448,7 @@ public class MonitorPanel extends JPanel {
 		panelMapOperation = new JPanel();
 		panelMapOperation.setPreferredSize(new Dimension(100, 200));
 		panelMapOperation.setBackground(Color.BLACK);
-		final int x_panelMapOperation = displayPanelDimension.width
-				- panelMapOperation.getPreferredSize().width;
+		final int x_panelMapOperation = displayPanelDimension.width - panelMapOperation.getPreferredSize().width;
 		final int y_panelMapOperation = 1;
 
 		lblNeedToZoom = new JLabel("Need to zoom");
@@ -498,12 +458,10 @@ public class MonitorPanel extends JPanel {
 		lblNeedToZoom.setFont(new Font("Tahoma", Font.BOLD, 20));
 		lblNeedToZoom.setPreferredSize(new Dimension(600, 50));
 		lblNeedToZoom.setVisible(false);
-		lblNeedToZoom.setBounds(1, 35, lblNeedToZoom.getPreferredSize().width,
-				lblNeedToZoom.getPreferredSize().height);
+		lblNeedToZoom.setBounds(1, 35, lblNeedToZoom.getPreferredSize().width, lblNeedToZoom.getPreferredSize().height);
 		add(lblNeedToZoom);
 
-		panelMapOperation.setBounds(x_panelMapOperation, y_panelMapOperation,
-				100, 200);
+		panelMapOperation.setBounds(x_panelMapOperation, y_panelMapOperation, 100, 200);
 		add(panelMapOperation);
 		panelMapOperation.setLayout(null);
 
@@ -514,8 +472,8 @@ public class MonitorPanel extends JPanel {
 		btnMapZoomIn.setOpaque(false);
 		btnMapZoomIn.setContentAreaFilled(false);
 		btnMapZoomIn.setBorderPainted(false);
-		btnMapZoomIn.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "Zoom-In.png")));
+		btnMapZoomIn
+				.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "Zoom-In.png")));
 		btnMapZoomIn.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -530,8 +488,8 @@ public class MonitorPanel extends JPanel {
 		btnMapZoomOut.setOpaque(false);
 		btnMapZoomOut.setContentAreaFilled(false);
 		btnMapZoomOut.setBorderPainted(false);
-		btnMapZoomOut.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "Zoom-Out.png")));
+		btnMapZoomOut
+				.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "Zoom-Out.png")));
 		btnMapZoomOut.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -546,8 +504,7 @@ public class MonitorPanel extends JPanel {
 		btnMapUp.setOpaque(false);
 		btnMapUp.setContentAreaFilled(false);
 		btnMapUp.setBorderPainted(false);
-		btnMapUp.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "up.png")));
+		btnMapUp.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "up.png")));
 		btnMapUp.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -562,8 +519,7 @@ public class MonitorPanel extends JPanel {
 		btnMapDown.setOpaque(false);
 		btnMapDown.setContentAreaFilled(false);
 		btnMapDown.setBorderPainted(false);
-		btnMapDown.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "down.png")));
+		btnMapDown.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "down.png")));
 		btnMapDown.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -578,8 +534,7 @@ public class MonitorPanel extends JPanel {
 		btnMapLeft.setOpaque(false);
 		btnMapLeft.setContentAreaFilled(false);
 		btnMapLeft.setBorderPainted(false);
-		btnMapLeft.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "left.png")));
+		btnMapLeft.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "left.png")));
 		btnMapLeft.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -594,8 +549,7 @@ public class MonitorPanel extends JPanel {
 		btnMapRight.setOpaque(false);
 		btnMapRight.setContentAreaFilled(false);
 		btnMapRight.setBorderPainted(false);
-		btnMapRight.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "right.png")));
+		btnMapRight.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "right.png")));
 		btnMapRight.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -610,8 +564,7 @@ public class MonitorPanel extends JPanel {
 		btnResetMap.setOpaque(false);
 		btnResetMap.setContentAreaFilled(false);
 		btnResetMap.setBorderPainted(false);
-		btnResetMap.setIcon(new ImageIcon(MonitorPanel.class
-				.getResource(Settings.inputBuiltinResource + "reset.png")));
+		btnResetMap.setIcon(new ImageIcon(MonitorPanel.class.getResource(settings.inputBuiltinResource + "reset.png")));
 		btnResetMap.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent arg0) {
@@ -629,13 +582,6 @@ public class MonitorPanel extends JPanel {
 		lblDownloading.setVisible(false);
 		add(lblDownloading);
 
-		lblPlaceNameDownloading = new JLabel("Retriving place name...");
-		lblPlaceNameDownloading.setForeground(Color.BLUE);
-		lblPlaceNameDownloading.setFont(new Font("Tahoma", Font.BOLD, 14));
-		lblPlaceNameDownloading.setBounds(5, 80, 250, 30);
-		lblPlaceNameDownloading.setVisible(false);
-		add(lblPlaceNameDownloading);
-
 		lblSetupProgress = new JLabel("Setup progress: ");
 		lblSetupProgress.setVerticalAlignment(SwingConstants.CENTER);
 		lblSetupProgress.setOpaque(true);
@@ -643,35 +589,9 @@ public class MonitorPanel extends JPanel {
 		lblSetupProgress.setForeground(Color.BLUE);
 		lblSetupProgress.setFont(new Font("Serif", Font.BOLD, 30));
 		lblSetupProgress.setBackground(Color.WHITE);
-		lblSetupProgress.setBounds(0, (displayPanelDimension.height / 2) - 100,
-				displayPanelDimension.width, 200);
+		lblSetupProgress.setBounds(0, (displayPanelDimension.height / 2) - 100, displayPanelDimension.width, 200);
 		add(lblSetupProgress);
 		lblSetupProgress.setVisible(false);
-
-		// OpenStreetMap attribution label
-		lblOsmAttr = new JLabel(
-				"<html><a href=''>\u00A9OpenStreetMap</a>  contributors</html>");
-		lblOsmAttr.setBounds(displayPanelDimension.width - 200,
-				displayPanelDimension.height - 70, 200, 20);
-		lblOsmAttr.setForeground(Color.black);
-		lblOsmAttr.setOpaque(true);
-		lblOsmAttr.setHorizontalAlignment(SwingConstants.CENTER);
-		lblOsmAttr.setFont(new Font("Tahoma", Font.PLAIN, 15));
-		lblOsmAttr.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				try {
-					Desktop.getDesktop().browse(
-							new URI("https://osm.org/copyright"));
-
-				} catch (IOException | URISyntaxException e1) {
-					e1.printStackTrace();
-				}
-			}
-
-		});
-		add(lblOsmAttr);
-		lblOsmAttr.setVisible(false);
 
 		/*
 		 * Set cursor
@@ -682,13 +602,9 @@ public class MonitorPanel extends JPanel {
 		 */
 		prepareStaticMapImage();
 		/*
-		 * Prepare place name image
-		 */
-		preparePlaceNameImage();
-		/*
 		 * Import road edges
 		 */
-		importRoadEdges(server.roadNetwork, minLon, minLat, maxLon, maxLat);
+		importRoadEdges(roadNetwork, minLon, minLat, maxLon, maxLat);
 		/*
 		 * Prepare road network image
 		 */
@@ -725,10 +641,9 @@ public class MonitorPanel extends JPanel {
 	/**
 	 * Block/unblock lanes
 	 */
-	void blockUnblockLane(final EdgeObject selectedEdge, final int laneNumber,
-			final boolean blocked) {
-		final Edge edge = server.roadNetwork.edges.get(selectedEdge.index);
-		final Lane lane = edge.lanes.get(laneNumber);
+	void blockUnblockLane(final EdgeObject selectedEdge, final int laneNumber, final boolean blocked) {
+		final Edge edge = processor.getRoadNetwork().edges.get(selectedEdge.index);
+		final Lane lane = edge.getLane(laneNumber);
 
 		// Update the blocked edges for visualization
 		if (blocked) {
@@ -749,16 +664,48 @@ public class MonitorPanel extends JPanel {
 		}
 
 		// Inform server about the action
-		server.askWorkersChangeLaneBlock(lane.index, blocked);
+		processor.askWorkersChangeLaneBlock(lane.index, blocked);
 	}
 
-	void changeMap(final double minLon, final double minLat,
-			final double maxLon, final double maxLat) {
+	void changeLaneDirection(final EdgeObject selectedEdge) {
+		Edge edge = processor.getRoadNetwork().edges.get(selectedEdge.index);
+		processor.getRoadNetwork().updateLaneDirections(new ArrayList<Integer>(edge.index));
+		// Inform server about the action
+		processor.askWorkersChangeLaneDirection(edge.index);
+	}
+
+	/*void blockUnblockLane(final LaneObject selectedLane) {
+		final Lane lane = processor.getRoadNetwork().lanes.get(selectedLane.index);
+		final Edge edge = lane.edge;
+
+		// Update the blocked edges for visualization
+		if (blocked) {
+			roadEdgesWithBlockingSign.put(lane.index, selectedEdge);
+			selectedEdge.laneBlocks[laneNumber] = true;
+		} else {
+			selectedEdge.laneBlocks[laneNumber] = false;
+			boolean isAllLanesOpen = true;
+			for (final boolean isBlocked : selectedEdge.laneBlocks) {
+				if (isBlocked) {
+					isAllLanesOpen = false;
+					break;
+				}
+			}
+			if (isAllLanesOpen) {
+				roadEdgesWithBlockingSign.remove(selectedEdge.index);
+			}
+		}
+
+		// Inform server about the action
+		processor.askWorkersChangeLaneBlock(lane.index, blocked);
+	}*/
+
+	void changeMap(final double minLon, final double minLat, final double maxLon, final double maxLat) {
 		this.minLon = minLon;
 		this.minLat = minLat;
 		this.maxLon = maxLon;
 		this.maxLat = maxLat;
-		importRoadEdges(server.roadNetwork, minLon, minLat, maxLon, maxLat);
+		importRoadEdges(processor.getRoadNetwork(), minLon, minLat, maxLon, maxLat);
 		resetMap();
 	}
 
@@ -767,11 +714,7 @@ public class MonitorPanel extends JPanel {
 	 * traffic flow)
 	 */
 	public void changeTrafficDrawingMethod(final String type) {
-		if (type.equals("Vehicles")) {
-			isUseTrafficFlowToReplaceVehicle = false;
-		} else {
-			isUseTrafficFlowToReplaceVehicle = true;
-		}
+		isUseTrafficFlowToReplaceVehicle = !type.equals("Vehicles");
 		if (!isReceivingData) {
 			prepareObjectsImage();
 			repaint();
@@ -790,8 +733,7 @@ public class MonitorPanel extends JPanel {
 	}
 
 	void changeZoomFromCenter(final int newZoom) {
-		final Point zoomPoint = new Point(
-				(int) (0.5 * displayPanelDimension.width),
+		final Point zoomPoint = new Point((int) (0.5 * displayPanelDimension.width),
 				(int) (0.5 * displayPanelDimension.height));
 		changeZoomFromPoint(newZoom, zoomPoint);
 	}
@@ -835,14 +777,12 @@ public class MonitorPanel extends JPanel {
 		/*
 		 * Prepare images except static map image
 		 */
-		if (minZoomExceptStaticMapImage <= currentZoom
-				&& currentZoom <= maxZoomExceptStaticMapImage) {
+		if (minZoomExceptStaticMapImage <= currentZoom && currentZoom <= maxZoomExceptStaticMapImage) {
 			prepareRoadNetworkImage();
 			if (!isReceivingData) {
 				prepareObjectsImage();
 			}
 			prepareOverlayImage();
-			preparePlaceNameImage();
 		}
 
 		/*
@@ -874,37 +814,37 @@ public class MonitorPanel extends JPanel {
 	 * Convert latitude to Y.
 	 */
 	int convertLatToY(final double latitude) {
-		return (int) (((((maxLat - latitude) * Settings.lonVsLat) / mapHeightInLonDegree) * mapAreaHeightInPixels) + offset_MapAreaToDisplayPanel_TopLeftY);
+		return (int) (((((maxLat - latitude) * settings.lonVsLat) / mapHeightInLonDegree) * mapAreaHeightInPixels)
+				+ offset_MapAreaToDisplayPanel_TopLeftY);
 	}
 
 	/**
 	 * Convert longitude to X.
 	 */
 	int convertLonToX(final double longitude) {
-		return (int) ((((longitude - minLon) / mapWidthInLonDegree) * mapAreaWidthInPixels) + offset_MapAreaToDisplayPanel_TopLeftX);
+		return (int) ((((longitude - minLon) / mapWidthInLonDegree) * mapAreaWidthInPixels)
+				+ offset_MapAreaToDisplayPanel_TopLeftX);
 	}
 
 	/**
 	 * Convert X to longitude.
 	 */
 	double convertXToLon(final double x) {
-		return minLon
-				+ (((x - offset_MapAreaToDisplayPanel_TopLeftX) / mapAreaWidthInPixels) * mapWidthInLonDegree);
+		return minLon + (((x - offset_MapAreaToDisplayPanel_TopLeftX) / mapAreaWidthInPixels) * mapWidthInLonDegree);
 	}
 
 	/**
 	 * Convert Y to latitude.
 	 */
 	double convertYToLat(final double y) {
-		return maxLat
-				- ((((y - offset_MapAreaToDisplayPanel_TopLeftY) / mapAreaHeightInPixels) * mapHeightInLonDegree) / Settings.lonVsLat);
+		return maxLat - ((((y - offset_MapAreaToDisplayPanel_TopLeftY) / mapAreaHeightInPixels) * mapHeightInLonDegree)
+				/ settings.lonVsLat);
 	}
 
 	/**
 	 * Draw one intersection on buffered image.
 	 */
-	void drawIntersectionOnImage(final Graphics2D g2d,
-			final IntersectionObject intersection) {
+	void drawIntersectionOnImage(final Graphics2D g2d, final IntersectionObject intersection) {
 		final int x = (convertLonToX(intersection.lon));
 		final int y = (convertLatToY(intersection.lat));
 		g2d.fillOval(x - 10, y - 10, 20, 20);
@@ -913,9 +853,8 @@ public class MonitorPanel extends JPanel {
 	/**
 	 * Draw query rectangle.
 	 */
-	void drawQueryRectangle(final Graphics2D g2d, final double topLeftLon,
-			final double topLeftLat, final double bottomRightLon,
-			final double bottomRightLat) {
+	void drawQueryRectangle(final Graphics2D g2d, final double topLeftLon, final double topLeftLat,
+			final double bottomRightLon, final double bottomRightLat) {
 		g2d.drawRect(convertLonToX(topLeftLon), convertLatToY(topLeftLat),
 				convertLonToX(bottomRightLon) - convertLonToX(topLeftLon),
 				-(convertLatToY(topLeftLat) - convertLatToY(bottomRightLat)));
@@ -924,40 +863,61 @@ public class MonitorPanel extends JPanel {
 	/**
 	 * Draw one road edge on buffered image.
 	 */
-	void drawRoadEdgeOnImage(final Graphics2D g2d,
-			final Rectangle actualDrawingArea, final EdgeObject roadEdge,
+	void drawRoadEdgeOnImage(final Graphics2D g2d, final Rectangle actualDrawingArea, final EdgeObject roadEdge,
 			final EdgeEndMarkerType endMarkerType) {
-		/*
-		 * Calculate final positions
-		 */
-		final int startX = (convertLonToX(roadEdge.startNodeLon));
-		final int startY = (convertLatToY(roadEdge.startNodeLat));
-		final int endX = (convertLonToX(roadEdge.endNodeLon));
-		final int endY = (convertLatToY(roadEdge.endNodeLat));
+		int iter = 0;
+		for (DrawingObject.LaneObject lane : roadEdge.lanes) {
+				/*
+				 * Calculate final positions
+				 */
+				final int startX = (convertLonToX(lane.lonStart));
+				final int startY = (convertLatToY(lane.latStart));
+				final int endX = (convertLonToX(lane.lonEnd));
+				final int endY = (convertLatToY(lane.latEnd));
 
-		/*
-		 * Draw a line representing the edge if it intersects the area shown in
-		 * the actual panel
-		 */
-		if (actualDrawingArea.intersectsLine(startX, startY, endX, endY)) {
-			g2d.drawLine(startX, startY, endX, endY);
+				/*
+				 * Draw a line representing the edge if it intersects the area shown in
+				 * the actual panel
+				 */
+				if (actualDrawingArea.intersectsLine(startX, startY, endX, endY)) {
+					g2d.drawLine(startX, startY, endX, endY);
+				}
+		}
+	}
+
+	void drawRoadLaneOnImage(final Graphics2D g2d, final Rectangle actualDrawingArea, final EdgeObject roadEdge,
+							 final EdgeEndMarkerType endMarkerType) {
+
+		int iter = 0;
+
+		for (DrawingObject.LaneObject lane : roadEdge.lanes) {
+
+			if (roadEdge.laneBlocks[iter]) {
+				/*
+				 * Calculate final positions
+				 */
+				final int startX = (convertLonToX(lane.lonStart));
+				final int startY = (convertLatToY(lane.latStart));
+				final int endX = (convertLonToX(lane.lonEnd));
+				final int endY = (convertLatToY(lane.latEnd));
+
+				/*
+				 * Draw a line representing the edge if it intersects the area shown in
+				 * the actual panel
+				 */
+				if (actualDrawingArea.intersectsLine(startX, startY, endX, endY)) {
+					g2d.drawLine(startX, startY, endX, endY);
+				}
+			}
+			iter++;
 		}
 
-		/*
-		 * Draw a dot at the start node.
-		 */
-		if (endMarkerType == EdgeEndMarkerType.start) {
-			g2d.fill(new Rectangle2D.Double(startX - 5, startY - 5, 10, 10));
-		} else if (endMarkerType == EdgeEndMarkerType.end) {
-			g2d.fill(new Rectangle2D.Double(endX - 5, endY - 5, 10, 10));
-		}
 	}
 
 	/**
 	 * Draw one tram stop on buffered image.
 	 */
-	void drawTramStopOnImage(final Graphics2D g2d,
-			final Rectangle actualDrawingArea,
+	void drawTramStopOnImage(final Graphics2D g2d, final Rectangle actualDrawingArea,
 			final TramStopObject tramStopObject) {
 		/*
 		 * Calculate final positions
@@ -976,15 +936,29 @@ public class MonitorPanel extends JPanel {
 				g2d.drawOval(x, y, 1, 1);
 			}
 		}
+	}
 
+	/**
+	 * Draw one tram stop on buffered image.
+	 */
+	void drawNodeOnImage(final Graphics2D g2d, final Rectangle actualDrawingArea,
+							 final DrawingObject.NodeObject nodeObject) {
+		Polygon polygon = new Polygon();
+		for (Point2D point2D : nodeObject.polygon) {
+			int x = convertLonToX(point2D.getX());
+			int y = convertLatToY(point2D.getY());
+			polygon.addPoint(x,y);
+		}
+		g2d.drawPolygon(polygon);
 	}
 
 	/**
 	 * Draw one vehicle on buffered image.
 	 */
-	void drawVehicleOnImage(final Rectangle actualDrawingArea,
-			final Graphics2D g2d, final Serializable_GUI_Vehicle vehicle,
-			final VehicleObjectType drawType) {
+	void drawVehicleOnImage(final Rectangle actualDrawingArea, final Graphics2D g2d,
+			final Serializable_GUI_Vehicle vehicle, final VehicleObjectType drawType) {
+		g2d.setStroke(new BasicStroke((int) (vehicle.width/getMetersPerPixel()), BasicStroke.CAP_BUTT,
+				BasicStroke.CAP_BUTT));
 		final int headX = convertLonToX(vehicle.lonHead);
 		final int headY = convertLatToY(vehicle.latHead);
 		final int tailX = convertLonToX(vehicle.lonTail);
@@ -994,9 +968,8 @@ public class MonitorPanel extends JPanel {
 		 * Highlight emergency vehicle.
 		 */
 		if (VehicleType.getVehicleTypeFromName(vehicle.type) == VehicleType.PRIORITY) {
-			g2d.drawImage(imageEmergencyVehicle,
-					tailX - (imageEmergencyVehicle.getWidth() / 2), tailY
-							- imageEmergencyVehicle.getHeight(), null);
+			g2d.drawImage(imageEmergencyVehicle, tailX - (imageEmergencyVehicle.getWidth() / 2),
+					tailY - imageEmergencyVehicle.getHeight(), null);
 		}
 
 		/*
@@ -1004,8 +977,7 @@ public class MonitorPanel extends JPanel {
 		 */
 		int colourType = 0;
 		if (drawType == VehicleObjectType.normal) {
-			final double speedRatio = vehicle.speed
-					/ vehicle.originalEdgeMaxSpeed;
+			final double speedRatio = vehicle.speed / vehicle.originalEdgeMaxSpeed;
 			if (speedRatio < 0.25) {
 				colourType = 0;
 				g2d.setColor(new Color(255, 0, 0, 255));
@@ -1027,12 +999,7 @@ public class MonitorPanel extends JPanel {
 		 * Draw the object if it is in the area shown in the actual panel
 		 */
 		if (actualDrawingArea.contains(new Point(headX, headY))) {
-			if (currentZoom > 18) {
-				g2d.drawLine(headX, headY, tailX, tailY);
-				g2d.fillRect(tailX - 6, tailY - 6, 12, 12);
-			} else {
-				g2d.fillRect(tailX - 3, tailY - 3, 6, 6);
-			}
+			g2d.drawLine(headX, headY, tailX, tailY);
 
 			/*
 			 * Display vehicle details.
@@ -1040,22 +1007,28 @@ public class MonitorPanel extends JPanel {
 			if (vehicleDetailOn) {
 				String detail = "";
 				switch (VehicleDetailType.valueOf(vehicleDetailType)) {
-				case Type:
-					detail = vehicle.type;
-					break;
-				case Remaining_Links:
-					detail = String.valueOf(vehicle.numLinksToGo);
-					break;
-				case ID_Worker:
-					detail = vehicle.id + "@" + vehicle.worker;
-					break;
-				case Driver_Profile:
-					detail = vehicle.driverProfile;
-					break;
+					case Type:
+						detail = vehicle.type;
+						break;
+					case Remaining_Links:
+						detail = String.valueOf(vehicle.numLinksToGo);
+						break;
+					case ID_Worker:
+						detail = vehicle.vid + "@" + vehicle.worker;
+						break;
+					case Driver_Profile:
+						detail = vehicle.driverProfile;
+						break;
+					case Slowdown_Factor:
+						detail = vehicle.slowDownFactor;
+						break;
+					case HeadwayMultiplier:
+						detail = String.valueOf(vehicle.headwayMultiplier);
+						break;
 				}
 
 				g2d.setColor(Color.black);
-				g2d.drawString(" " + detail, headX, headY - 10);
+				g2d.drawString(" " + detail, headX, headY);
 			}
 
 			/*
@@ -1063,8 +1036,7 @@ public class MonitorPanel extends JPanel {
 			 */
 			if (vehicle.isAffectedByPriorityVehicle) {
 				g2d.setColor(Color.CYAN);
-				g2d.drawOval(((tailX + headX) / 2) - 3,
-						((tailY + headY) / 2) - 3, 6, 6);
+				g2d.drawOval(((tailX + headX) / 2) - 3, ((tailY + headY) / 2) - 3, 6, 6);
 			}
 		}
 	}
@@ -1073,39 +1045,30 @@ public class MonitorPanel extends JPanel {
 	 * Select edge or edge end at mouse point.
 	 */
 	synchronized void findEdgeAtMousePoint(final Point mousePoint) {
-		final double ratioXtoWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + mousePoint.x)
-				/ mapAreaWidthInPixels;
-		final double ratioYtoHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + mousePoint.y)
-				/ mapAreaHeightInPixels;
+		final double ratioXtoWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + mousePoint.x) / mapAreaWidthInPixels;
+		final double ratioYtoHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + mousePoint.y) / mapAreaHeightInPixels;
 
-		final double lat = maxLat
-				- (ratioYtoHeight * Math.abs(maxLat - minLat));
+		final double lat = maxLat - (ratioYtoHeight * Math.abs(maxLat - minLat));
 		final double lon = minLon + (ratioXtoWidth * Math.abs(maxLon - minLon));
-		final Edge edgeAtPoint = server.roadNetwork.getEdgeAtPoint(lat, lon);
+		final Edge edgeAtPoint = processor.getRoadNetwork().getEdgeAtPoint(lat, lon);
 		if (edgeAtPoint != null) {
 			// Check whether an intersection should be selected
-			final double distToStartPoint = RoadUtil.getDistInMeters(lat, lon,
-					edgeAtPoint.startNode.lat, edgeAtPoint.startNode.lon);
-			final double distToEndPoint = RoadUtil.getDistInMeters(lat, lon,
-					edgeAtPoint.endNode.lat, edgeAtPoint.endNode.lon);
-			if ((distToStartPoint <= distToEndPoint)
-					&& (distToStartPoint < 0.3)) {
-				roadIntersectionAtMousePoint = new IntersectionObject(
-						edgeAtPoint.startNode.lon, edgeAtPoint.startNode.lat,
-						edgeAtPoint.index, true);
+			final double distToStartPoint = RoadUtil.getDistInMeters(lat, lon, edgeAtPoint.startNode.lat,
+					edgeAtPoint.startNode.lon);
+			final double distToEndPoint = RoadUtil.getDistInMeters(lat, lon, edgeAtPoint.endNode.lat,
+					edgeAtPoint.endNode.lon);
+			if ((distToStartPoint <= distToEndPoint) && (distToStartPoint < 0.3)) {
+				roadIntersectionAtMousePoint = new IntersectionObject(edgeAtPoint.startNode.lon,
+						edgeAtPoint.startNode.lat, edgeAtPoint.index, true);
 				roadEdgeAtMousePoint = null;
-			} else if ((distToEndPoint < distToStartPoint)
-					&& (distToEndPoint < 0.3)) {
-				roadIntersectionAtMousePoint = new IntersectionObject(
-						edgeAtPoint.endNode.lon, edgeAtPoint.endNode.lat,
+			} else if ((distToEndPoint < distToStartPoint) && (distToEndPoint < 0.3)) {
+				roadIntersectionAtMousePoint = new IntersectionObject(edgeAtPoint.endNode.lon, edgeAtPoint.endNode.lat,
 						edgeAtPoint.index, false);
 				roadEdgeAtMousePoint = null;
 			} else {
-				final EdgeObject dummyEdge = new EdgeObject(0, 0, 0, 0,
-						edgeAtPoint.index, 0, "", 0, null);
-				roadEdgeAtMousePoint = edgeObjects.get(Collections
-						.binarySearch(edgeObjects, dummyEdge,
-								new EdgeObjectComparator()));
+				final EdgeObject dummyEdge = new EdgeObject(0, 0, 0, 0, edgeAtPoint.index, 0, "", 0, null, null);
+				roadEdgeAtMousePoint = edgeObjects
+						.get(Collections.binarySearch(edgeObjects, dummyEdge, new EdgeObjectComparator()));
 				roadIntersectionAtMousePoint = null;
 			}
 		} else {
@@ -1114,35 +1077,74 @@ public class MonitorPanel extends JPanel {
 		}
 	}
 
+	synchronized void findLaneAreaAtMousePoint(final Point mousePoint){
+		final double ratioXtoWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + mousePoint.x) / mapAreaWidthInPixels;
+		final double ratioYtoHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + mousePoint.y) / mapAreaHeightInPixels;
+
+		final double lat = maxLat - (ratioYtoHeight * Math.abs(maxLat - minLat));
+		final double lon = minLon + (ratioXtoWidth * Math.abs(maxLon - minLon));
+
+		final Lane laneAtPoint = processor.getRoadNetwork().findLaneAtPoint(lat, lon);
+
+
+
+		if (laneAtPoint != null){
+			//laneAtMousePoint = new LaneObject(laneAtPoint.latStart, laneAtPoint.lonStart,
+			//								  laneAtPoint.latEnd, laneAtPoint.lonEnd, laneAtPoint.index);
+			Edge edgeAtPoint = laneAtPoint.edge;
+			final EdgeObject dummyEdge = new EdgeObject(0, 0, 0, 0, edgeAtPoint.index, 0, "", 0, null, null);
+			roadEdgeAtMousePoint = edgeObjects
+					.get(Collections.binarySearch(edgeObjects, dummyEdge, new EdgeObjectComparator()));
+			roadIntersectionAtMousePoint = null;
+		}
+		else{
+			roadEdgeAtMousePoint = null;
+			laneAtMousePoint = null;
+		}
+	}
+
 	/*
 	 * Select source/destination window at mouse point
 	 */
 	synchronized void findSdWindowAtMousePoint(final Point mousePoint) {
-		final double ratioXtoWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + mousePoint.x)
-				/ mapAreaWidthInPixels;
-		final double ratioYtoHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + mousePoint.y)
-				/ mapAreaHeightInPixels;
+		final double ratioXtoWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + mousePoint.x) / mapAreaWidthInPixels;
+		final double ratioYtoHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + mousePoint.y) / mapAreaHeightInPixels;
 
-		final double lat = maxLat
-				- (ratioYtoHeight * Math.abs(maxLat - minLat));
+		final double lat = maxLat - (ratioYtoHeight * Math.abs(maxLat - minLat));
 		final double lon = minLon + (ratioXtoWidth * Math.abs(maxLon - minLon));
 
 		sdWindowAtMousePoint = getSourceDestinationWindowAtPoint(lat, lon);
 	}
 
 	double[] getCoordOfQueryWindow() {
-		return new double[] { queryWindowTopLeft.x, queryWindowTopLeft.y,
-				queryWindowBottomRight.x, queryWindowBottomRight.y };
+		return new double[] { queryWindowTopLeft.x, queryWindowTopLeft.y, queryWindowBottomRight.x,
+				queryWindowBottomRight.y };
 	}
 
-	double getMetersPerPixel(final double latitude, final int zoom) {
-		return (Math.cos((latitude * Math.PI) / 180) * 2 * Math.PI * 6371000)
-				/ (256 * (Math.pow(2, zoom)));
+	/**
+	 * Calculate the latitude of the center of display panel.
+	 */
+	double getDisplayPanelCenterLatitude() {
+		return convertYToLat(0.5 * displayPanelDimension.height);
+	}
+
+	/**
+	 * Calculate the longitude of the center of display panel.
+	 */
+	double getDisplayPanelCenterLongitude() {
+		return convertXToLon(0.5 * displayPanelDimension.width);
+	}
+
+	double getMetersPerPixel() {
+		return (Math.cos((maxLat * Math.PI) / 180) * 2 * Math.PI * 6371000) / (256 * (Math.pow(2, currentZoom)));
+	}
+
+	Edge getSelectedRoadEdge() {
+		return processor.getRoadNetwork().edges.get(roadEdgeAtMousePoint.index);
 	}
 
 	Node getSelectedRoadIntersectionNode() {
-		final Edge edge = server.roadNetwork.edges
-				.get(roadIntersectionAtMousePoint.edgeIndex);
+		final Edge edge = processor.getRoadNetwork().edges.get(roadIntersectionAtMousePoint.edgeIndex);
 		if (roadIntersectionAtMousePoint.isAtEdgeStart) {
 			return edge.startNode;
 		} else {
@@ -1150,25 +1152,18 @@ public class MonitorPanel extends JPanel {
 		}
 	}
 
-	public double[] getSourceDestinationWindowAtPoint(final double lat,
-			final double lon) {
-		double[] windowFound = getWindowAtPoint(
-				Settings.listRouteSourceWindowForInternalVehicle, lon, lat);
+	public double[] getSourceDestinationWindowAtPoint(final double lat, final double lon) {
+		double[] windowFound = getWindowAtPoint(settings.guiSourceWindowsForInternalVehicle, lon, lat);
 		if (windowFound == null) {
-			windowFound = getWindowAtPoint(
-					Settings.listRouteDestinationWindowForInternalVehicle, lon,
-					lat);
+			windowFound = getWindowAtPoint(settings.guiDestinationWindowsForInternalVehicle, lon, lat);
 		}
 		if (windowFound == null) {
-			windowFound = getWindowAtPoint(
-					Settings.listRouteSourceDestinationWindowForInternalVehicle,
-					lon, lat);
+			windowFound = getWindowAtPoint(settings.guiSourceDestinationWindowsForInternalVehicle, lon, lat);
 		}
 		return windowFound;
 	}
 
-	double[] getWindowAtPoint(final ArrayList<double[]> windowList,
-			final double lon, final double lat) {
+	double[] getWindowAtPoint(final List<double[]> windowList, final double lon, final double lat) {
 		double topLeftLon, topLeftLat, btmRightLon, btmRightLat;
 		for (final double[] window : windowList) {
 			topLeftLon = window[0];
@@ -1179,8 +1174,7 @@ public class MonitorPanel extends JPanel {
 					|| ((Math.abs(lon - btmRightLon) < 0.0001) && ((topLeftLat > lat) && (btmRightLat < lat)))
 					|| ((Math.abs(lat - topLeftLat) < 0.0001) && ((btmRightLon > lon) && (topLeftLon < lon)))
 					|| ((Math.abs(lat - btmRightLat) < 0.0001) && ((btmRightLon > lon) && (topLeftLon < lon)))) {
-				return new double[] { topLeftLon, topLeftLat, btmRightLon,
-						btmRightLat };
+				return new double[] { topLeftLon, topLeftLat, btmRightLon, btmRightLat };
 			}
 		}
 		return null;
@@ -1193,10 +1187,11 @@ public class MonitorPanel extends JPanel {
 	/**
 	 * Import the information of each edge from a string
 	 *
-	 * @param edgePositions
+	 *
 	 */
-	void importRoadEdges(final RoadNetwork roadNetwork, final double minLon,
-			final double minLat, final double maxLon, final double maxLat) {
+	void importRoadEdges(final RoadNetwork roadNetwork, final double minLon, final double minLat, final double maxLon,
+			final double maxLat) {
+		nodeObjects.clear();
 		edgeObjects.clear();
 		lightObjects.clear();
 		tramStopObjects.clear();
@@ -1210,7 +1205,7 @@ public class MonitorPanel extends JPanel {
 			startNodeY = edge.startNode.lat;
 			endNodeX = edge.endNode.lon;
 			endNodeY = edge.endNode.lat;
-			numLanes = edge.lanes.size();
+			numLanes = edge.getLaneCount();
 			String note = "";
 			if (edge.name.length() > 0) {
 				note += "\"" + edge.name + "\", ";
@@ -1218,15 +1213,18 @@ public class MonitorPanel extends JPanel {
 			note += edge.type.name() + ", ";
 			note += numLanes + " lane(s), ";
 			note += (int) edge.length + "m, ";
-			note += "'" + edge.startNode.osmId + "' to '" + edge.endNode.osmId
-					+ "', ";
+			note += "'" + edge.startNode.index + "' to '" + edge.endNode.index + "', ";
 			note += "Idx " + edge.index + ", ";
 			note += (int) (edge.freeFlowSpeed * 3.6) + "kmh";
 
+			List<DrawingObject.LaneObject> laneObjs = new ArrayList<>();
+			for (Lane lane : edge.getLanes()) {
+				DrawingObject.LaneObject laneObject = new DrawingObject.LaneObject(lane.latStart, lane.lonStart, lane.latEnd, lane.lonEnd);
+				laneObjs.add(laneObject);
+			}
 			// Create simplified edge object
-			final EdgeObject e = new EdgeObject(startNodeX, startNodeY,
-					endNodeX, endNodeY, edge.index, numLanes, note,
-					edge.length, edge.type);
+			final EdgeObject e = new EdgeObject(startNodeX, startNodeY, endNodeX, endNodeY, edge.index, numLanes, note,
+					edge.length, edge.type, laneObjs);
 			edgeObjects.add(e);
 
 			if (edge.endNode.tramStop) {
@@ -1241,9 +1239,10 @@ public class MonitorPanel extends JPanel {
 		 * can be edited by user.
 		 */
 		for (final Node node : roadNetwork.nodes) {
+			DrawingObject.NodeObject nodeObject = new DrawingObject.NodeObject(node.lon, node.lat, node.getIntersectionPolygon());
+			nodeObjects.add(nodeObject);
 			if (node.light) {
-				final Serializable_GUI_Light lightObject = new Serializable_GUI_Light(
-						node.lon, node.lat, "G");
+				final Serializable_GUI_Light lightObject = new Serializable_GUI_Light(node.lon, node.lat, "G");
 				lightObjects.add(lightObject);
 			}
 		}
@@ -1252,17 +1251,13 @@ public class MonitorPanel extends JPanel {
 	void loadIconImages() {
 		try {
 			for (int i = 0; i < 4; i++) {
-				final BufferedImage img = ImageIO.read(getClass()
-						.getResourceAsStream(
-								Settings.inputBuiltinResource + "Car" + i
-										+ ".png"));
+				final BufferedImage img = ImageIO
+						.read(getClass().getResourceAsStream(settings.inputBuiltinResource + "Car" + i + ".png"));
 				imageCars.add(img);
 			}
-			imageAlert = ImageIO.read(getClass().getResourceAsStream(
-					(Settings.inputBuiltinResource + "alert.png")));
-			imageEmergencyVehicle = ImageIO.read(getClass()
-					.getResourceAsStream(
-							(Settings.inputBuiltinResource + "pilot.png")));
+			imageAlert = ImageIO.read(getClass().getResourceAsStream((settings.inputBuiltinResource + "alert.png")));
+			imageEmergencyVehicle = ImageIO
+					.read(getClass().getResourceAsStream((settings.inputBuiltinResource + "pilot.png")));
 		} catch (final IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -1300,10 +1295,6 @@ public class MonitorPanel extends JPanel {
 		 */
 		needNewStaticMapImage = true;
 		/*
-		 * Prepare place name image
-		 */
-		preparePlaceNameImage();
-		/*
 		 * Prepare road network image.
 		 */
 		prepareRoadNetworkImage();
@@ -1332,29 +1323,18 @@ public class MonitorPanel extends JPanel {
 		 * Draw static map image
 		 */
 		if (staticMapImageOn) {
-			g2dPanel.drawImage(staticMapImage, offsetStaticMapImageTopLeftX,
-					offsetStaticMapImageTopLeftY, null);
-		}
-		/*
-		 * Draw place name image
-		 */
-		if (isShowPlaceNames) {
-			g2dPanel.drawImage(placeNameImage, 0, 0, null);
+			g2dPanel.drawImage(staticMapImage, offsetStaticMapImageTopLeftX, offsetStaticMapImageTopLeftY, null);
 		}
 
 		/*
-		 * Draw other images
+		 * Draw images except static map image
 		 */
-		if (minZoomExceptStaticMapImage <= currentZoom
-				&& currentZoom <= maxZoomExceptStaticMapImage) {
+		if (minZoomExceptStaticMapImage <= currentZoom && currentZoom <= maxZoomExceptStaticMapImage) {
 			if (roadNetworkOn) {
-				g2dPanel.drawImage(roadNetworkImage, offsetImageTopLeftX,
-						offsetImageTopLeftY, null);
+				g2dPanel.drawImage(roadNetworkImage, offsetImageTopLeftX, offsetImageTopLeftY, null);
 			}
-			g2dPanel.drawImage(objectsImage, offsetImageTopLeftX,
-					offsetImageTopLeftY, null);
-			g2dPanel.drawImage(overlayImage, offsetImageTopLeftX,
-					offsetImageTopLeftY, null);
+			g2dPanel.drawImage(objectsImage, offsetImageTopLeftX, offsetImageTopLeftY, null);
+			g2dPanel.drawImage(overlayImage, offsetImageTopLeftX, offsetImageTopLeftY, null);
 		}
 
 	}
@@ -1366,8 +1346,8 @@ public class MonitorPanel extends JPanel {
 		isComposingObjectImage = true;
 
 		final Rectangle actualDrawingArea = new Rectangle(displayPanelDimension);
-		objectsImage = new BufferedImage(displayPanelDimension.width,
-				displayPanelDimension.height, BufferedImage.TYPE_INT_ARGB);
+		objectsImage = new BufferedImage(displayPanelDimension.width, displayPanelDimension.height,
+				BufferedImage.TYPE_INT_ARGB);
 		final Graphics2D g2d = objectsImage.createGraphics();
 
 		if (!isUseTrafficFlowToReplaceVehicle) {
@@ -1406,26 +1386,18 @@ public class MonitorPanel extends JPanel {
 			/*
 			 * Draw vehicles
 			 */
-			g2d.setStroke(new BasicStroke((int) (Math.pow(currentZoom / 8,
-					currentZoom / 7)), BasicStroke.CAP_BUTT,
-					BasicStroke.CAP_BUTT));
 			for (final Serializable_GUI_Vehicle vehicle : vehicleObjects) {
-				drawVehicleOnImage(actualDrawingArea, g2d, vehicle,
-						VehicleObjectType.normal);
+				drawVehicleOnImage(actualDrawingArea, g2d, vehicle, VehicleObjectType.normal);
 			}
 		} else {
-			final BasicStroke thickStroke = new BasicStroke(5,
-					BasicStroke.CAP_ROUND, BasicStroke.CAP_ROUND);
-			final BasicStroke thinStroke = new BasicStroke(5,
-					BasicStroke.CAP_ROUND, BasicStroke.CAP_ROUND);
+			final BasicStroke thickStroke = new BasicStroke(5, BasicStroke.CAP_ROUND, BasicStroke.CAP_ROUND);
+			final BasicStroke thinStroke = new BasicStroke(5, BasicStroke.CAP_ROUND, BasicStroke.CAP_ROUND);
 			// Get average ratio (vehicle speed/free-flow speed) at individual
 			// edges
-			final double[][] accumulatedSpdRatio = new double[edgeObjects
-					.size()][2];
+			final double[][] accumulatedSpdRatio = new double[edgeObjects.size()][2];
 			for (final Serializable_GUI_Vehicle vehicle : vehicleObjects) {
 				accumulatedSpdRatio[vehicle.edgeIndex][0]++;
-				accumulatedSpdRatio[vehicle.edgeIndex][1] += vehicle.speed
-						/ vehicle.originalEdgeMaxSpeed;
+				accumulatedSpdRatio[vehicle.edgeIndex][1] += vehicle.speed / vehicle.originalEdgeMaxSpeed;
 			}
 
 			// Draw green edges first
@@ -1433,11 +1405,9 @@ public class MonitorPanel extends JPanel {
 			for (int i = 0; i < edgeObjects.size(); i++) {
 				g2d.setColor(Color.decode("#84CA50"));
 				if ((int) accumulatedSpdRatio[i][0] == 0) {
-					drawRoadEdgeOnImage(g2d, actualDrawingArea,
-							edgeObjects.get(i), EdgeEndMarkerType.none);
+					drawRoadEdgeOnImage(g2d, actualDrawingArea, edgeObjects.get(i), EdgeEndMarkerType.none);
 				} else if ((accumulatedSpdRatio[i][1] / accumulatedSpdRatio[i][0]) > 0.75) {
-					drawRoadEdgeOnImage(g2d, actualDrawingArea,
-							edgeObjects.get(i), EdgeEndMarkerType.none);
+					drawRoadEdgeOnImage(g2d, actualDrawingArea, edgeObjects.get(i), EdgeEndMarkerType.none);
 				}
 			}
 			// Draw other edges on top of the green ones
@@ -1455,8 +1425,7 @@ public class MonitorPanel extends JPanel {
 				} else {
 					g2d.setColor(Color.decode("#9E1313"));
 				}
-				drawRoadEdgeOnImage(g2d, actualDrawingArea, edgeObjects.get(i),
-						EdgeEndMarkerType.none);
+				drawRoadEdgeOnImage(g2d, actualDrawingArea, edgeObjects.get(i), EdgeEndMarkerType.none);
 			}
 
 		}
@@ -1468,33 +1437,28 @@ public class MonitorPanel extends JPanel {
 	 * Draw image containing blocked edges, selected areas, etc.
 	 */
 	void prepareOverlayImage() {
-		overlayImage = new BufferedImage(displayPanelDimension.width,
-				displayPanelDimension.height, BufferedImage.TYPE_INT_ARGB);
+		overlayImage = new BufferedImage(displayPanelDimension.width, displayPanelDimension.height,
+				BufferedImage.TYPE_INT_ARGB);
 		final Graphics2D g2d = overlayImage.createGraphics();
 		g2d.setFont(new Font(g2d.getFont().getFontName(), Font.BOLD, 20));
-		final Rectangle actualDrawingArea = new Rectangle(
-				displayPanelDimension.width, displayPanelDimension.height);
+		final Rectangle actualDrawingArea = new Rectangle(displayPanelDimension.width, displayPanelDimension.height);
 		/*
 		 * Draw source/destination window
 		 */
 		g2d.setColor(Color.magenta);
 		final float dash[] = { 4.0f };
-		g2d.setStroke(new BasicStroke(3, BasicStroke.CAP_ROUND,
-				BasicStroke.JOIN_ROUND, 10.0f, dash, 0.0f));
-		for (final double[] window : Settings.listRouteSourceWindowForInternalVehicle) {
+		g2d.setStroke(new BasicStroke(3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0f, dash, 0.0f));
+		for (final double[] window : settings.guiSourceWindowsForInternalVehicle) {
 			drawQueryRectangle(g2d, window[0], window[1], window[2], window[3]);
-			g2d.drawString("S", convertLonToX(window[0]) - 20,
-					convertLatToY(window[1]) + 20);
+			g2d.drawString("S", convertLonToX(window[0]) - 20, convertLatToY(window[1]) + 20);
 		}
-		for (final double[] window : Settings.listRouteDestinationWindowForInternalVehicle) {
+		for (final double[] window : settings.guiDestinationWindowsForInternalVehicle) {
 			drawQueryRectangle(g2d, window[0], window[1], window[2], window[3]);
-			g2d.drawString("D", convertLonToX(window[0]) - 20,
-					convertLatToY(window[1]) + 20);
+			g2d.drawString("D", convertLonToX(window[0]) - 20, convertLatToY(window[1]) + 20);
 		}
-		for (final double[] window : Settings.listRouteSourceDestinationWindowForInternalVehicle) {
+		for (final double[] window : settings.guiSourceDestinationWindowsForInternalVehicle) {
 			drawQueryRectangle(g2d, window[0], window[1], window[2], window[3]);
-			g2d.drawString("S/D", convertLonToX(window[0]) - 40,
-					convertLatToY(window[1]) + 20);
+			g2d.drawString("S/D", convertLonToX(window[0]) - 40, convertLatToY(window[1]) + 20);
 		}
 		g2d.setColor(Color.black);
 
@@ -1502,27 +1466,23 @@ public class MonitorPanel extends JPanel {
 		 * Draw blocked lanes
 		 */
 		g2d.setColor(Color.magenta);
-		g2d.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT,
-				BasicStroke.JOIN_MITER, 10.0f, new float[] { 10.0f }, 0.0f));
-		final ArrayList<EdgeObject> roadEdgesToDraw = new ArrayList<>(
-				roadEdgesWithBlockingSign.values());
+		g2d.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[] { 10.0f },
+				0.0f));
+		final ArrayList<EdgeObject> roadEdgesToDraw = new ArrayList<>(roadEdgesWithBlockingSign.values());
 		for (final EdgeObject re : roadEdgesToDraw) {
-			drawRoadEdgeOnImage(g2d, actualDrawingArea, re,
-					EdgeEndMarkerType.start);
+			drawRoadLaneOnImage(g2d, actualDrawingArea, re, EdgeEndMarkerType.start);
 		}
 		g2d.setColor(Color.black);
 
 		/*
 		 * Edge at mouse point
-		 */if (roadEdgeAtMousePoint != null) {
+		 */
+		if (roadEdgeAtMousePoint != null) {
 			g2d.setColor(Color.cyan);
-			g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND,
-					BasicStroke.JOIN_ROUND));
-			drawRoadEdgeOnImage(g2d, actualDrawingArea, roadEdgeAtMousePoint,
-					EdgeEndMarkerType.start);
+			g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			drawRoadEdgeOnImage(g2d, actualDrawingArea, roadEdgeAtMousePoint, EdgeEndMarkerType.start);
 			g2d.setColor(Color.black);
-			g2d.drawString(roadEdgeAtMousePoint.note, mousePoint.x,
-					mousePoint.y);
+			g2d.drawString(roadEdgeAtMousePoint.note, mousePoint.x, mousePoint.y);
 		}
 
 		/*
@@ -1531,8 +1491,7 @@ public class MonitorPanel extends JPanel {
 		if (!controlPanel.isDuringSimulation) {
 			g2d.setColor(Color.cyan);
 			if (roadIntersectionAtMousePoint != null) {
-				g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND,
-						BasicStroke.JOIN_ROUND));
+				g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 				drawIntersectionOnImage(g2d, roadIntersectionAtMousePoint);
 			}
 
@@ -1540,8 +1499,7 @@ public class MonitorPanel extends JPanel {
 			 * Highlight window at mouse point
 			 */
 			if (sdWindowAtMousePoint != null) {
-				drawQueryRectangle(g2d, sdWindowAtMousePoint[0],
-						sdWindowAtMousePoint[1], sdWindowAtMousePoint[2],
+				drawQueryRectangle(g2d, sdWindowAtMousePoint[0], sdWindowAtMousePoint[1], sdWindowAtMousePoint[2],
 						sdWindowAtMousePoint[3]);
 			}
 			g2d.setColor(Color.black);
@@ -1550,11 +1508,10 @@ public class MonitorPanel extends JPanel {
 		 * Draw current query window
 		 */
 		g2d.setColor(Color.blue);
-		g2d.setStroke(new BasicStroke(3, BasicStroke.CAP_ROUND,
-				BasicStroke.JOIN_ROUND));
+		g2d.setStroke(new BasicStroke(3, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 		if (validateQueryWindow()) {
-			drawQueryRectangle(g2d, queryWindowTopLeft.x, queryWindowTopLeft.y,
-					queryWindowBottomRight.x, queryWindowBottomRight.y);
+			drawQueryRectangle(g2d, queryWindowTopLeft.x, queryWindowTopLeft.y, queryWindowBottomRight.x,
+					queryWindowBottomRight.y);
 		}
 		g2d.setColor(Color.black);
 
@@ -1565,21 +1522,24 @@ public class MonitorPanel extends JPanel {
 	 * to draw vehicles
 	 */
 	void prepareRoadNetworkImage() {
-		roadNetworkImage = new BufferedImage(displayPanelDimension.width,
-				displayPanelDimension.height, BufferedImage.TYPE_INT_ARGB);
+		roadNetworkImage = new BufferedImage(displayPanelDimension.width, displayPanelDimension.height,
+				BufferedImage.TYPE_INT_ARGB);
 		final Graphics2D g2d = roadNetworkImage.createGraphics();
 		g2d.setColor(new Color(224, 224, 235, 255));
-		final Rectangle actualDrawingArea = new Rectangle(
-				displayPanelDimension.width, displayPanelDimension.height);
-		g2d.setStroke(new BasicStroke((int) Math.pow(
-				(double) currentZoom / 6.0, (double) currentZoom / 7.0),
-				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
+		int laneWidthPixel = (int) Math.round((settings.laneWidthInMeters/getMetersPerPixel())*0.95);
+		final Rectangle actualDrawingArea = new Rectangle(displayPanelDimension.width, displayPanelDimension.height);
+		g2d.setStroke(new BasicStroke(laneWidthPixel, BasicStroke.CAP_ROUND,
+				BasicStroke.JOIN_ROUND));
 		for (final EdgeObject e : edgeObjects) {
-			drawRoadEdgeOnImage(g2d, actualDrawingArea, e,
-					EdgeEndMarkerType.none);
+			drawRoadEdgeOnImage(g2d, actualDrawingArea, e, EdgeEndMarkerType.none);
 		}
-
+		g2d.setStroke(new BasicStroke((float) Math.ceil(0.1/getMetersPerPixel())));
+		g2d.setColor(Color.black);
+		for (DrawingObject.NodeObject nodeObject : nodeObjects) {
+			drawNodeOnImage(g2d, actualDrawingArea, nodeObject);
+		}
+		g2d.setStroke(new BasicStroke(laneWidthPixel, BasicStroke.CAP_ROUND,
+				BasicStroke.JOIN_ROUND));
 		g2d.setColor(Color.BLUE);
 		for (final TramStopObject t : tramStopObjects) {
 			drawTramStopOnImage(g2d, actualDrawingArea, t);
@@ -1593,15 +1553,13 @@ public class MonitorPanel extends JPanel {
 	void prepareStaticMapImage() {
 		needNewStaticMapImage = false;
 		if (!staticMapImageOn) {
-			lblOsmAttr.setVisible(false);
 			return;
 		}
-		lblOsmAttr.setVisible(true);
 		isLoadingStaticMapImage = true;
 		final Thread thread = new Thread() {
 			@Override
 			public void run() {
-				// Max number of tiles on two axis
+				// Max number of tiles on two axis 
 				int tileCountHorizontal = 1;
 				while (tileCountHorizontal * 256 < displayPanelDimension.width) {
 					tileCountHorizontal++;
@@ -1615,234 +1573,90 @@ public class MonitorPanel extends JPanel {
 				tileCountVertical += 1;
 
 				// The static image will hold the tiles
-				staticMapImage = new BufferedImage(tileCountHorizontal * 256,
-						tileCountVertical * 256, BufferedImage.TYPE_INT_ARGB);
+				staticMapImage = new BufferedImage(tileCountHorizontal * 256, tileCountVertical * 256,
+						BufferedImage.TYPE_INT_ARGB);
 
 				// Get the x/y of the top-left tile
 				double lonOfPanelCorner = convertXToLon(0);
 				double latOfPanelCorner = convertYToLat(0);
-				String tileNumberOfFirstTile = openStreetMapTile.getTileNumber(
-						latOfPanelCorner, lonOfPanelCorner, currentZoom);
-				String[] partsInFirstTileNumber = tileNumberOfFirstTile
-						.split("/");
-				int xFirstTileNumber = Integer
-						.parseInt(partsInFirstTileNumber[1]);
-				int yFirstTileNumber = Integer
-						.parseInt(partsInFirstTileNumber[2]);
+				String tileNumberOfFirstTile = openStreetMapTile.getTileNumber(latOfPanelCorner, lonOfPanelCorner,
+						currentZoom);
+				String[] partsInFirstTileNumber = tileNumberOfFirstTile.split("/");
+				int xFirstTileNumber = Integer.parseInt(partsInFirstTileNumber[1]);
+				int yFirstTileNumber = Integer.parseInt(partsInFirstTileNumber[2]);
 
-				// Update the offset of the whole static map image, relative to
-				// the top-left corner of panel
-				OpenStreetMapTile.BoundingBox boxOfFirstTile = openStreetMapTile
-						.tile2boundingBox(currentZoom, xFirstTileNumber,
-								yFirstTileNumber);
-				offsetStaticMapImageTopLeftX = (int) (-1 * (256.0 * (lonOfPanelCorner - boxOfFirstTile.west) / (boxOfFirstTile.east - boxOfFirstTile.west)));
-				offsetStaticMapImageTopLeftY = (int) (-1 * (256.0 * (boxOfFirstTile.north - latOfPanelCorner) / (boxOfFirstTile.north - boxOfFirstTile.south)));
+				// Update the offset of the whole static map image, relative to the top-left corner of panel
+				OpenStreetMapTile.BoundingBox boxOfFirstTile = openStreetMapTile.tile2boundingBox(currentZoom,
+						xFirstTileNumber, yFirstTileNumber);
+				offsetStaticMapImageTopLeftX = (int) (-1 * (256.0 * (lonOfPanelCorner - boxOfFirstTile.west)
+						/ (boxOfFirstTile.east - boxOfFirstTile.west)));
+				offsetStaticMapImageTopLeftY = (int) (-1 * (256.0 * (boxOfFirstTile.north - latOfPanelCorner)
+						/ (boxOfFirstTile.north - boxOfFirstTile.south)));
 
-				// To avoid heavy load on tile server, there should be
-				// no more than two connections at the same time for each
-				// of the 3 servers. Build 6 query sets for 2x3 threads.
-				HashMap<String, String> a1Queries = new HashMap<String, String>();
-				HashMap<String, String> a2Queries = new HashMap<String, String>();
-				HashMap<String, String> b1Queries = new HashMap<String, String>();
-				HashMap<String, String> b2Queries = new HashMap<String, String>();
-				HashMap<String, String> c1Queries = new HashMap<String, String>();
-				HashMap<String, String> c2Queries = new HashMap<String, String>();
-
-				HashMap<String, String> querySet = c2Queries;
-				String prefix = "c";
-				numTilesNeededForStaticMapImage = tileCountHorizontal
-						* tileCountVertical;
-				numTilesDownloadedForCurrentStaticMapImage = 0;
-
-				// Download all the tiles and draw them on the buffered image
-				// final ArrayList<Integer> completedTiles = new
-				// ArrayList<Integer>();
+				// Download all the tiles and draw them on the buffered image	
+				final ArrayList<Integer> completedTiles = new ArrayList<Integer>();
 				for (int i = 0; i <= tileCountHorizontal; i++) {
 					for (int j = 0; j <= tileCountVertical; j++) {
 						// tile number
 						int xInTileNumber = xFirstTileNumber + i;
 						int yInTileNumber = yFirstTileNumber + j;
-						String tileNumber = currentZoom + "/" + xInTileNumber
-								+ "/" + yInTileNumber;
+						String tileNumber = "" + currentZoom + "/" + xInTileNumber + "/" + yInTileNumber;
 						// coordinate of tile's top-left corner on panel
 						int xInPanel = i * 256;
 						int yInPanel = j * 256;
 
-						// Queries are evenly distributed to query sets
-						if (querySet == c2Queries) {
-							querySet = a1Queries;
-							prefix = "a";
-						} else if (querySet == a1Queries) {
-							querySet = a2Queries;
-							prefix = "a";
-						} else if (querySet == a2Queries) {
-							querySet = b1Queries;
-							prefix = "b";
-						} else if (querySet == b1Queries) {
-							querySet = b2Queries;
-							prefix = "b";
-						} else if (querySet == b2Queries) {
-							querySet = c1Queries;
-							prefix = "c";
-						} else if (querySet == c1Queries) {
-							querySet = c2Queries;
-							prefix = "c";
-						}
+						new Thread(new Runnable() {
+							int tileId;
+							int totalNumTiles;
 
-						String urlString = "http://" + prefix
-								+ ".tile.openstreetmap.fr/hot/" + tileNumber
-								+ ".png";
-						String key = xInPanel + "-" + yInPanel + "-"
-								+ tileNumber;
-						querySet.put(key, urlString);
+							public Runnable init(int tileId, int totalNumTiles) {
+								this.tileId = tileId;
+								this.totalNumTiles = totalNumTiles;
+								return this;
+							}
+
+							public void run() {
+								try {
+									if (currentZoom <= maxZoomStaticMapImage) {
+										String[] prefixes = new String[] { "a", "b", "c" };
+										String randomPrefix = prefixes[random.nextInt(prefixes.length)];
+										String urlString = "http://" + randomPrefix + ".tile.openstreetmap.org/"
+												+ tileNumber + ".png";
+										final URL url = new URL(urlString);
+										final BufferedImage in = ImageIO.read(url);
+										final Graphics2D g = staticMapImage.createGraphics();
+										g.drawImage(in, xInPanel, yInPanel, null);
+										g.dispose();
+									} else {
+										BufferedImage in = ImageIO.read(getClass()
+												.getResourceAsStream((settings.inputBuiltinResource + "osmZoom.png")));
+										final Graphics2D g = staticMapImage.createGraphics();
+										g.drawImage(in, xInPanel, yInPanel, null);
+										g.dispose();
+									}
+									repaint();
+									completedTiles.add(this.tileId);
+									if (completedTiles.size() == totalNumTiles) {
+										isLoadingStaticMapImage = false;
+									}
+								} catch (Exception e) {
+								}
+							}
+						}.init(i * j, tileCountHorizontal * tileCountVertical)).start();
 					}
 				}
-
-				downloadOsmTilesToFillStaticMapImage(a1Queries);
-				downloadOsmTilesToFillStaticMapImage(a2Queries);
-				downloadOsmTilesToFillStaticMapImage(b1Queries);
-				downloadOsmTilesToFillStaticMapImage(b2Queries);
-				downloadOsmTilesToFillStaticMapImage(c1Queries);
-				downloadOsmTilesToFillStaticMapImage(c2Queries);
 			}
 		};
 		thread.start();
 	}
 
-	void downloadOsmTilesToFillStaticMapImage(HashMap<String, String> querySet) {
-		Thread thread = new Thread(new Runnable() {
-			public void run() {
-				final Graphics2D g = staticMapImage.createGraphics();
-
-				for (String key : querySet.keySet()) {
-					String[] itemsInKey = key.split("-");
-					int xInPanel = Integer.parseInt(itemsInKey[0]);
-					int yInPanel = Integer.parseInt(itemsInKey[1]);
-					String tileNumber = itemsInKey[2];
-					if (currentZoom <= maxZoomStaticMapImage) {
-						try {
-							if (OsmTileCache.containsKey(tileNumber)) {
-								g.drawImage(OsmTileCache.get(tileNumber),
-										xInPanel, yInPanel, null);
-							} else {
-								final URL url = new URL(querySet.get(key));
-								final BufferedImage in = ImageIO.read(url);
-								g.drawImage(in, xInPanel, yInPanel, null);
-								if (OsmTileCache.keySet().size() > 1000) {
-									OsmTileCache.clear();// Control cache size
-								}
-								OsmTileCache.put(tileNumber, in);
-							}
-						} catch (Exception e) {
-							System.out
-									.println("Has problem downloading OSM map image tile with query: "
-											+ querySet.get(key));
-						}
-					} else {
-						try {
-							BufferedImage in = ImageIO
-									.read(getClass()
-											.getResourceAsStream(
-													(Settings.inputBuiltinResource + "osmZoom.png")));
-							g.drawImage(in, xInPanel, yInPanel, null);
-						} catch (IOException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-					}
-
-					repaint();
-
-					numTilesDownloadedForCurrentStaticMapImage++;
-					if (numTilesNeededForStaticMapImage == numTilesDownloadedForCurrentStaticMapImage) {
-						isLoadingStaticMapImage = false;// All tiles have been
-														// filled
-					}
-				}
-
-				g.dispose();
-			}
-		});
-		thread.start();
-	}
-
-	/**
-	 * Download static map image.
-	 */
-	void preparePlaceNameImage() {
-		if (!isShowPlaceNames) {
-			return;
-		}
-
-		// The static image will display place names
-		placeNameImage = new BufferedImage(displayPanelDimension.width,
-				displayPanelDimension.height, BufferedImage.TYPE_INT_ARGB);
-		final Graphics2D g2d = placeNameImage.createGraphics();
-		g2d.setColor(Color.black);
-
-		// Coordinates of whole area
-		double leftLongitude = convertXToLon(0);
-		double rightLongitude = convertXToLon(displayPanelDimension.width);
-		double topLatitude = convertYToLat(0);
-		double bottomLatitude = convertYToLat(displayPanelDimension.height);
-		// Index of border cells
-		int columnLeft = (int) (leftLongitude + 180);
-		int columnRight = (int) (rightLongitude + 180);
-		int rowTop = (int) (topLatitude + 90);
-		int rowBottom = (int) (bottomLatitude + 90);
-
-		// Sequence of place types, from most significant to least significant
-		ArrayList<String> placeTypeSequence = new ArrayList<String>(
-				Arrays.asList("PPL", "PPLC", "PPLA", "PPLA2", "PPLA3", "PPLA4",
-						"PPLA5", "PPLL", "PPLR", "PPLS", "PPLX"));
-		// Get places based on the types
-		ArrayList<Place> placesToShow = new ArrayList<Place>();
-		for (String type : placeTypeSequence) {
-			Places[][] placesOfType = placesAroundWorld.get(type);
-			for (int i = columnLeft; i <= columnRight; i++) {
-				for (int j = rowBottom; j <= rowTop; j++) {
-					ArrayList<Place> placesInCell = placesOfType[i][j].places;
-					for (Place place : placesInCell) {
-						if (leftLongitude <= place.longitude
-								&& place.longitude <= rightLongitude
-								&& bottomLatitude <= place.latitude
-								&& place.latitude <= topLatitude) {
-							placesToShow.add(place);
-						}
-					}
-				}
-			}
-			// Limit the total number of places to show
-			if (placesToShow.size() > 100) {
-				// Do not show places from less significant types
-				break;
-			}
-		}
-
-		// Draw place names on the image
-		for (Place place : placesToShow) {
-			int centreX = convertLonToX(place.longitude);
-			int centreY = convertLatToY(place.latitude);
-			int nameTagWidth = g2d.getFontMetrics().stringWidth(place.name);
-			int nameTagHeight = g2d.getFontMetrics().getHeight();
-			g2d.drawString(place.name, centreX - nameTagWidth / 2, centreY
-					- nameTagHeight / 2);
-		}
-
-	}
-
 	void removeSourceDestinationWindow(final double[] windowToRemove) {
-		removeWindow(Settings.listRouteSourceWindowForInternalVehicle,
-				windowToRemove);
-		removeWindow(Settings.listRouteDestinationWindowForInternalVehicle,
-				windowToRemove);
-		removeWindow(
-				Settings.listRouteSourceDestinationWindowForInternalVehicle,
-				windowToRemove);
+		removeWindow(settings.guiSourceWindowsForInternalVehicle, windowToRemove);
+		removeWindow(settings.guiDestinationWindowsForInternalVehicle, windowToRemove);
+		removeWindow(settings.guiSourceDestinationWindowsForInternalVehicle, windowToRemove);
 	}
 
-	void removeWindow(final ArrayList<double[]> windowList,
-			final double[] windowToRemove) {
+	void removeWindow(final List<double[]> windowList, final double[] windowToRemove) {
 		for (int i = 0; i < windowList.size(); i++) {
 			boolean isMatch = true;
 			for (int j = 0; j < 4; j++) {
@@ -1867,12 +1681,11 @@ public class MonitorPanel extends JPanel {
 		mousePoint.y = (int) (0.5 * displayPanelDimension.height);
 		currentZoom = 16;
 		mapWidthInLonDegree = Math.abs(maxLon - minLon);
-		mapHeightInLonDegree = Math.abs(maxLat - minLat) * Settings.lonVsLat;
+		mapHeightInLonDegree = Math.abs(maxLat - minLat) * settings.lonVsLat;
 		updateMapAreaDimension();
 		updateOffsetMapAreaToDisplayPanel(mousePoint, 0.5, 0.5);
-		placeNameImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+		staticMapImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
 		prepareStaticMapImage();
-		preparePlaceNameImage();
 		prepareRoadNetworkImage();
 		prepareObjectsImage();
 		prepareOverlayImage();
@@ -1898,14 +1711,13 @@ public class MonitorPanel extends JPanel {
 				final EdgeObject edgeSelected = roadEdgeAtMousePoint;
 				final ActionListener menuListener = new ActionListener() {
 					public void actionPerformed(final ActionEvent event) {
-						final String[] words = event.getActionCommand().split(
-								" ");
+						final String[] words = event.getActionCommand().split(" ");
 						if (words[0].equals("Unblock")) {
-							blockUnblockLane(edgeSelected,
-									Integer.parseInt(words[2]), false);
+							blockUnblockLane(edgeSelected, Integer.parseInt(words[2]), false);
 						} else if (words[0].equals("Block")) {
-							blockUnblockLane(edgeSelected,
-									Integer.parseInt(words[2]), true);
+							blockUnblockLane(edgeSelected, Integer.parseInt(words[2]), true);
+						} else if (words[0].equals("Change")) {
+							changeLaneDirection(edgeSelected);
 						} else if (words[0].equals("Close")) {
 							hidePopupMenu();
 						}
@@ -1914,8 +1726,7 @@ public class MonitorPanel extends JPanel {
 				// Add blocking options based on lanes' status
 				for (int i = 0; i < edgeSelected.laneBlocks.length; i++) {
 					if (edgeSelected.laneBlocks[i]) {
-						final JMenuItem item = new JMenuItem("Unblock lane "
-								+ i);
+						final JMenuItem item = new JMenuItem("Unblock lane " + i);
 						item.addActionListener(menuListener);
 						popup.add(item);
 					} else {
@@ -1923,11 +1734,18 @@ public class MonitorPanel extends JPanel {
 						item.addActionListener(menuListener);
 						popup.add(item);
 					}
-				}
+				}	
+				final JMenuItem itemC = new JMenuItem("Change Direction of Last Lane");
+				itemC.addActionListener(menuListener);
+				popup.add(itemC);
+				
 				// Add close menu option
 				final JMenuItem item = new JMenuItem("Close menu");
 				item.addActionListener(menuListener);
 				popup.add(item);
+
+			}
+			else if (toDo.equals("lane")){
 
 			}
 		} else {
@@ -1937,17 +1755,15 @@ public class MonitorPanel extends JPanel {
 
 					public void actionPerformed(final ActionEvent event) {
 						// If there is light, remove it, vice versa
-						server.setLightChangeNode(nodeSelected);
+						processor.setLightChangeNode(nodeSelected);
 						// Change light object list
-						if (event.getActionCommand().equalsIgnoreCase(
-								"Add light")) {
-							final Serializable_GUI_Light lightObject = new Serializable_GUI_Light(
-									nodeSelected.lon, nodeSelected.lat, "G");
+						if (event.getActionCommand().equalsIgnoreCase("Add light")) {
+							final Serializable_GUI_Light lightObject = new Serializable_GUI_Light(nodeSelected.lon,
+									nodeSelected.lat, "G");
 							lightObjects.add(lightObject);
 							// Update object image layer
 							prepareObjectsImage();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Delete light")) {
+						} else if (event.getActionCommand().equalsIgnoreCase("Delete light")) {
 							for (final Serializable_GUI_Light lightObject : lightObjects) {
 								if ((lightObject.longitude == nodeSelected.lon)
 										&& (lightObject.latitude == nodeSelected.lat)) {
@@ -1957,8 +1773,7 @@ public class MonitorPanel extends JPanel {
 							}
 							// Update object image layer
 							prepareObjectsImage();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Close menu")) {
+						} else if (event.getActionCommand().equalsIgnoreCase("Close menu")) {
 							hidePopupMenu();
 						}
 
@@ -1981,62 +1796,47 @@ public class MonitorPanel extends JPanel {
 				final double[] windowSelected = sdWindowAtMousePoint;
 				final ActionListener menuListener = new ActionListener() {
 					public void actionPerformed(final ActionEvent event) {
-						if (event.getActionCommand().equalsIgnoreCase(
-								"Set as source")) {
-							Settings.listRouteSourceWindowForInternalVehicle
-									.add(getCoordOfQueryWindow());
+						if (event.getActionCommand().equalsIgnoreCase("Set as source")) {
+							settings.guiSourceWindowsForInternalVehicle.add(getCoordOfQueryWindow());
 							// Overlay image
 							prepareOverlayImage();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Set as destination")) {
-							Settings.listRouteDestinationWindowForInternalVehicle
-									.add(getCoordOfQueryWindow());
+						} else if (event.getActionCommand().equalsIgnoreCase("Set as destination")) {
+							settings.guiDestinationWindowsForInternalVehicle.add(getCoordOfQueryWindow());
 							// Overlay image
 							prepareOverlayImage();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Set as source and destination")) {
-							Settings.listRouteSourceDestinationWindowForInternalVehicle
-									.add(getCoordOfQueryWindow());
+						} else if (event.getActionCommand().equalsIgnoreCase("Set as source and destination")) {
+							settings.guiSourceDestinationWindowsForInternalVehicle.add(getCoordOfQueryWindow());
 							// Overlay image
 							prepareOverlayImage();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Download road network")) {
-							new GuiUtil.OSMDownloader(MonitorPanel.this, gui,
-									server).execute();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Remove source/destination window")) {
+						} else if (event.getActionCommand().equalsIgnoreCase("Download road network")) {
+							new GuiUtil.OSMDownloader(MonitorPanel.this, gui, settings).execute();
+						} else if (event.getActionCommand().equalsIgnoreCase("Remove source/destination window")) {
 							removeSourceDestinationWindow(windowSelected);
 							// Overlay image
 							prepareOverlayImage();
-						} else if (event.getActionCommand().equalsIgnoreCase(
-								"Close menu")) {
+						} else if (event.getActionCommand().equalsIgnoreCase("Close menu")) {
 							hidePopupMenu();
 						}
 					}
 				};
 
 				if (windowSelected == null) {
-					final JMenuItem itemAddSrcArea = new JMenuItem(
-							"Set as source");
+					final JMenuItem itemAddSrcArea = new JMenuItem("Set as source");
 					itemAddSrcArea.addActionListener(menuListener);
 					popup.add(itemAddSrcArea);
-					final JMenuItem itemAddDstArea = new JMenuItem(
-							"Set as destination");
+					final JMenuItem itemAddDstArea = new JMenuItem("Set as destination");
 					itemAddDstArea.addActionListener(menuListener);
 					popup.add(itemAddDstArea);
-					final JMenuItem itemAddSrcDstArea = new JMenuItem(
-							"Set as source and destination");
+					final JMenuItem itemAddSrcDstArea = new JMenuItem("Set as source and destination");
 					itemAddSrcDstArea.addActionListener(menuListener);
 					popup.add(itemAddSrcDstArea);
 				} else {
-					final JMenuItem itemRemoveSdArea = new JMenuItem(
-							"Remove source/destination window");
+					final JMenuItem itemRemoveSdArea = new JMenuItem("Remove source/destination window");
 					itemRemoveSdArea.addActionListener(menuListener);
 					popup.add(itemRemoveSdArea);
 				}
 				if (!isDownloadingOSM) {
-					final JMenuItem itemDownloadOSM = new JMenuItem(
-							"Download road network");
+					final JMenuItem itemDownloadOSM = new JMenuItem("Download road network");
 					itemDownloadOSM.addActionListener(menuListener);
 					popup.add(itemDownloadOSM);
 				}
@@ -2076,15 +1876,6 @@ public class MonitorPanel extends JPanel {
 	}
 
 	/**
-	 * Switch on/off static map image
-	 */
-	public void switchPlaceNameImage(final boolean onOff) {
-		isShowPlaceNames = onOff;
-		preparePlaceNameImage();
-		repaint();
-	}
-
-	/**
 	 * Switch on/off vehicle details
 	 */
 	public void switchVehicleDetail(final boolean onOff) {
@@ -2102,10 +1893,8 @@ public class MonitorPanel extends JPanel {
 	 *
 	 *
 	 */
-	public void update(
-			final HashMap<String, ArrayList<Serializable_GUI_Vehicle>> guiVehicleList,
-			final HashMap<String, ArrayList<Serializable_GUI_Light>> guiLightList,
-			final double realTimeFactor) {
+	public void update(final HashMap<String, ArrayList<Serializable_GUI_Vehicle>> guiVehicleList,
+			final HashMap<String, ArrayList<Serializable_GUI_Light>> guiLightList, final double realTimeFactor, double resolution) {
 		if (isComposingObjectImage) {
 			return;
 		}
@@ -2124,8 +1913,7 @@ public class MonitorPanel extends JPanel {
 		/*
 		 * Vehicles.
 		 */
-		for (final ArrayList<Serializable_GUI_Vehicle> list : guiVehicleList
-				.values()) {
+		for (final ArrayList<Serializable_GUI_Vehicle> list : guiVehicleList.values()) {
 			vehicleObjects.addAll(list);
 		}
 		// Update statistics
@@ -2135,8 +1923,7 @@ public class MonitorPanel extends JPanel {
 		/*
 		 * Traffic lights.
 		 */
-		for (final ArrayList<Serializable_GUI_Light> list : guiLightList
-				.values()) {
+		for (final ArrayList<Serializable_GUI_Light> list : guiLightList.values()) {
 			lightObjects.addAll(list);
 		}
 
@@ -2147,7 +1934,7 @@ public class MonitorPanel extends JPanel {
 		/*
 		 * Update time label
 		 */
-		updateTimeLabel(false, gui.stepToDraw, realTimeFactor);
+		updateTimeLabel(false, gui.stepToDraw, realTimeFactor,resolution);
 		/*
 		 * Re-draw
 		 */
@@ -2160,45 +1947,34 @@ public class MonitorPanel extends JPanel {
 	 * Calculate the dimension of virtual panel that holds the whole map. Then
 	 * calculate the distance offsets in X/Y that need to be added to everything
 	 * on the virtual panel.
-	 * 
+	 *
 	 * It seems that the online maps are based on distance measured by longitude
 	 * degrees. That means the vertical distance is also calculated using the
 	 * distance unit for horizontal distance. That is why we use a conversion
 	 * parameter when calculating the dimension of the virtual panel.
 	 */
 	void updateMapAreaAfterZoom(final Point point) {
-		final double pointXvsMapAreaWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + point.x)
-				/ mapAreaWidthInPixels;
-		final double pointYvsMapAreaHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + point.y)
-				/ mapAreaHeightInPixels;
+		final double pointXvsMapAreaWidth = (-offset_MapAreaToDisplayPanel_TopLeftX + point.x) / mapAreaWidthInPixels;
+		final double pointYvsMapAreaHeight = (-offset_MapAreaToDisplayPanel_TopLeftY + point.y) / mapAreaHeightInPixels;
 
 		updateMapAreaDimension();
 
-		updateOffsetMapAreaToDisplayPanel(point, pointXvsMapAreaWidth,
-				pointYvsMapAreaHeight);
+		updateOffsetMapAreaToDisplayPanel(point, pointXvsMapAreaWidth, pointYvsMapAreaHeight);
 	}
 
 	void updateMapAreaDimension() {
-		final double mapWidthInMeters = RoadUtil.getDistInMeters(
-				server.roadNetwork.maxLat, server.roadNetwork.minLon,
-				server.roadNetwork.maxLat, server.roadNetwork.maxLon);
-		final double mapHeightInMeters = RoadUtil.getDistInMeters(
-				server.roadNetwork.minLat, server.roadNetwork.minLon,
-				server.roadNetwork.maxLat, server.roadNetwork.minLon);
-		final double metersPerPixel = getMetersPerPixel(
-				server.roadNetwork.maxLat, currentZoom);
+		final double mapWidthInMeters = RoadUtil.getDistInMeters(maxLat, minLon, maxLat, maxLon);
+		final double mapHeightInMeters = RoadUtil.getDistInMeters(minLat, minLon, maxLat, minLon);
+		final double metersPerPixel = getMetersPerPixel();
 		mapAreaWidthInPixelsOld = mapAreaWidthInPixels;
 		mapAreaWidthInPixels = mapWidthInMeters / metersPerPixel;
 		mapAreaHeightInPixels = mapHeightInMeters / metersPerPixel;
 	}
 
-	void updateOffsetMapAreaToDisplayPanel(final Point point,
-			final double pointXvsMapAreaWidth,
+	void updateOffsetMapAreaToDisplayPanel(final Point point, final double pointXvsMapAreaWidth,
 			final double pointYvsMapAreaHeight) {
-		offset_MapAreaToDisplayPanel_TopLeftX = point.x
-				- (pointXvsMapAreaWidth * mapAreaWidthInPixels);
-		offset_MapAreaToDisplayPanel_TopLeftY = point.y
-				- (pointYvsMapAreaHeight * mapAreaHeightInPixels);
+		offset_MapAreaToDisplayPanel_TopLeftX = point.x - (pointXvsMapAreaWidth * mapAreaWidthInPixels);
+		offset_MapAreaToDisplayPanel_TopLeftY = point.y - (pointYvsMapAreaHeight * mapAreaHeightInPixels);
 	}
 
 	public void updateSetupProgress(final double createdVehicleRatio) {
@@ -2211,23 +1987,20 @@ public class MonitorPanel extends JPanel {
 	 *
 	 * @param realTimeFactor
 	 */
-	void updateTimeLabel(final boolean reset, final int stepCurrent,
-			final double realTimeFactor) {
+	void updateTimeLabel(final boolean reset, final int stepCurrent, final double realTimeFactor, double resolution) {
 		if (reset) {
 			statusLabel.setText("");
 		} else {
-			final long totalSeconds = (long) (stepCurrent / Settings.numStepsPerSecond);
+			final long totalSeconds = (long) (stepCurrent / resolution);
 			final long s = totalSeconds % 60;
 			final long m = (totalSeconds / 60) % 60;
 			final long h = (totalSeconds / (60 * 60)) % 24;
 			final long d = totalSeconds / (60 * 60 * 24);
 			String speedUp = "N/A";
 			if (realTimeFactor > 0) {
-				speedUp = String
-						.valueOf(Math.round(realTimeFactor * 100.0) / 100.0);
+				speedUp = String.valueOf(Math.round(realTimeFactor * 100.0) / 100.0);
 			}
-			statusLabel.setText("Time: " + d + " day " + h + " hours " + m
-					+ " minutes " + String.format("%02d", s)
+			statusLabel.setText("Time: " + d + " day " + h + " hours " + m + " minutes " + String.format("%02d", s)
 					+ " seconds. Speed-up: " + speedUp + ".");
 		}
 	}
@@ -2282,127 +2055,52 @@ public class MonitorPanel extends JPanel {
 		if ((queryWindowTopLeft == null) || (queryWindowBottomRight == null)) {
 			return false;
 		}
-		if ((queryWindowTopLeft.x == queryWindowBottomRight.x)
-				|| (queryWindowTopLeft.y == queryWindowBottomRight.y)) {
+		if ((queryWindowTopLeft.x == queryWindowBottomRight.x) || (queryWindowTopLeft.y == queryWindowBottomRight.y)) {
 			return false;
 		}
 		if (queryWindowTopLeft.x > queryWindowBottomRight.x) {
 			return false;
 		}
-		if (queryWindowTopLeft.y < queryWindowBottomRight.y) {
-			return false;
-		}
-		return true;
+		return !(queryWindowTopLeft.y < queryWindowBottomRight.y);
 	}
 
 	boolean validDisplayX() {
 		final double newMinLonDisplayArea = convertXToLon(0);
-		final double newMaxLonDisplayArea = convertXToLon(displayPanelDimension
-				.getWidth());
-		if (newMinLonDisplayArea <= -180) {
+		final double newMaxLonDisplayArea = convertXToLon(displayPanelDimension.getWidth());
+		if (newMinLonDisplayArea < -180) {
 			return false;
-		} else if (newMaxLonDisplayArea >= 180) {
-			return false;
-		}
-		return true;
+		} else return !(newMaxLonDisplayArea > 180);
 	}
 
 	boolean validDisplayY() {
 		final double newMaxLatDisplayArea = convertYToLat(0);
-		final double newMinLatDisplayArea = convertYToLat(displayPanelDimension
-				.getHeight());
+		final double newMinLatDisplayArea = convertYToLat(displayPanelDimension.getHeight());
 		if (newMaxLatDisplayArea > 80) {
 			return false;
-		} else if (newMinLatDisplayArea < -80) {
-			return false;
-		}
-		return true;
+		} else return !(newMinLatDisplayArea < -80);
 	}
 
-	public static String importBuiltinPlaceNameFile() {
-		try {
-			final InputStream inputStream = RoadUtil.class
-					.getResourceAsStream(Settings.inputBuiltinPlaceNameFile);
-			final Reader reader = new InputStreamReader(inputStream, "UTF-8");
-			final StringBuilder sb = new StringBuilder();
-			int numChars = -1;
-			final char[] chars = new char[1000];
-			do {
-				numChars = reader.read(chars, 0, chars.length);
-				if (numChars > 0) {
-					sb.append(chars, 0, numChars);
-				}
-			} while (numChars > 0);
-			return sb.toString();
-		} catch (final UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (final IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return null;
-	}
+	void updateEdgeObject(Edge edge){
+		final EdgeObject dummyEdge = new EdgeObject(0, 0, 0, 0, edge.index,
+				0, "", 0, null, null);
+		EdgeObject edgeObj = edgeObjects.get(Collections.binarySearch(edgeObjects, dummyEdge, new EdgeObjectComparator()));
 
-	static HashMap<String, Places[][]> buildPlaceNameDB() {
-		String rawData = importBuiltinPlaceNameFile();
-		HashMap<String, Places[][]> db = new HashMap<String, Places[][]>();
-		try (BufferedReader reader = new BufferedReader(new StringReader(
-				rawData))) {
-			String line = reader.readLine();
-			while (line != null) {
-				processPlaceNameData(db, line);
-				line = reader.readLine();
-			}
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return db;
-	}
 
-	static class Place {
-		double longitude;
-		double latitude;
-		String name;
 
-		public Place(double longitude, double latitude, String name) {
-			super();
-			this.longitude = longitude;
-			this.latitude = latitude;
-			this.name = name;
+		List<DrawingObject.LaneObject> laneObjs = new ArrayList<>();
+		for (Lane lane : edge.getLanes()) {
+			DrawingObject.LaneObject laneObject = new DrawingObject.LaneObject(lane.latStart, lane.lonStart, lane.latEnd, lane.lonEnd);
+			laneObjs.add(laneObject);
 		}
 
-	}
+		edgeObj.numLanes = edge.getLaneCount();
+		edgeObj.lanes = laneObjs;
 
-	static class Places {
-		ArrayList<Place> places = new ArrayList<Place>();
-	}
-
-	static void processPlaceNameData(HashMap<String, Places[][]> db,
-			String record) {
-		String[] items = record.split("\t");
-		String placeName = items[0];
-		double latitude = Double.valueOf(items[1]);
-		double longitude = Double.valueOf(items[2]);
-		String type = items[3];
-		if (!db.keySet().contains(type)) {
-			Places[][] places = new Places[360][180];
-			for (int i = 0; i < 360; i++) {
-				for (int j = 0; j < 180; j++) {
-					places[i][j] = new Places();
-				}
-			}
-			db.put(type, places);
+		edgeObj.laneBlocks = new boolean[edgeObj.numLanes];
+		for (int i = 0; i < edgeObj.laneBlocks.length; i++) {
+			edgeObj.laneBlocks[i] = false;
 		}
-		Places[][] placeGrid = db.get(type);
 
-		// Locate cell for this place
-		int column = (int) (longitude + 180.0);
-		int row = (int) (latitude + 90.0);
-		// Add record to the cell
-		placeGrid[column][row].places.add(new Place(longitude, latitude,
-				placeName));
+
 	}
-
 }

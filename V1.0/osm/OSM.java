@@ -1,16 +1,16 @@
 /*******************************************************************************
- * Copyright (C)  
- * 
+ * Copyright (C)
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  ******************************************************************************/
@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -98,15 +99,18 @@ public class OSM {
 	 */
 	public static void main(final String[] args) {
 		final OSM osm = new OSM();
+		Settings settings = new Settings();
+		String inputOpenStreetMapFile = null;
 		if (args.length > 0) {
-			Settings.inputOpenStreetMapFile = args[0];
+			inputOpenStreetMapFile = args[0];
 		} else {
-			if (Settings.inputOpenStreetMapFile.length() == 0) {
+			if (inputOpenStreetMapFile.length() == 0) {
 				System.out.println("You need to specify the path of the file for processing.");
 				return;
 			}
 		}
-		osm.processOSM(Settings.inputOpenStreetMapFile, false);
+		settings.inputOpenStreetMapFile = inputOpenStreetMapFile;
+		osm.processOSM(inputOpenStreetMapFile, false, settings);
 	}
 
 	FileOutputStream fosOutputFile;
@@ -165,10 +169,10 @@ public class OSM {
 			final boolean roundabout = Boolean.parseBoolean(e.getAttribute("roundabout"));
 			final String busRef = e.getAttribute("busRef");
 			final String tramRef = e.getAttribute("tramRef");
-			final int rightLanes = Integer.parseInt(e.getAttribute("rightLanes"));//Read number of 'straight or right turn' lanes if OSM data contains this customized field
-			final int leftLanes = Integer.parseInt(e.getAttribute("leftLanes"));//Read number of 'straight or left turn' lanes if OSM data contains this customized field
-			final int rightOnlyLanes = Integer.parseInt(e.getAttribute("rightOnlyLanes"));//Read number of right only lanes if OSM data contains this customized field
-			final int leftOnlyLanes = Integer.parseInt(e.getAttribute("leftOnlyLanes"));//Read number of left only lanes if OSM data contains this customized field
+			final int rightLanes = Integer.parseInt(e.getAttribute("rightLanes"));
+			final int leftLanes = Integer.parseInt(e.getAttribute("leftLanes"));
+			final int rightOnlyLanes = Integer.parseInt(e.getAttribute("rightOnlyLanes"));
+			final int leftOnlyLanes = Integer.parseInt(e.getAttribute("leftOnlyLanes"));
 
 			final NodeList children = e.getChildNodes();
 			for (int i = 0; i < (children.getLength() - 1); i++) {
@@ -476,9 +480,9 @@ public class OSM {
 	 *            file on disk
 	 * @return
 	 */
-	public void processOSM(final String inputFilePath, final boolean isToMemory) {
-		System.out.println("Building road network graph based on OSM file: " + Settings.inputOpenStreetMapFile);
-		if (scanXML(inputFilePath)) {
+	public void processOSM(final String inputFilePath, final boolean isToMemory, Settings settings) {
+		System.out.println("Building road network graph based on OSM file: " + settings.inputOpenStreetMapFile);
+		if (scanXML(inputFilePath, settings)) {
 			Collections.sort(elements_node, new XMLElementIdComparator());
 			Collections.sort(elements_way, new XMLElementIdComparator());
 			attachRouteRefToWays();
@@ -488,7 +492,7 @@ public class OSM {
 			getBoundingBox();
 
 			if (isToMemory) {
-				Settings.roadGraph = outputMapToString();
+				settings.roadGraph = outputMapToString();
 			} else {
 				initOutputFile();
 				outputStringToFile(outputMapToString());
@@ -501,7 +505,7 @@ public class OSM {
 	/*
 	 * Scans the XML file to get the lists of nodes, ways and relations.
 	 */
-	boolean scanXML(final String filePath) {
+	boolean scanXML(final String filePath, Settings settings) {
 		try {
 
 			final SAXParserFactory factory = SAXParserFactory.newInstance();
@@ -525,13 +529,12 @@ public class OSM {
 				ArrayList<Element> list_member = new ArrayList<>(1000);//Way reference in relation element
 
 				@Override
-				public void characters(final char ch[], final int start, final int length) throws SAXException {
+				public void characters(final char ch[], final int start, final int length) {
 
 				}
 
 				@Override
-				public void endElement(final String uri, final String localName, final String qName)
-						throws SAXException {
+				public void endElement(final String uri, final String localName, final String qName) {
 
 					if (qName.equals("node")) {
 						elements_node.add(e_node);
@@ -562,7 +565,7 @@ public class OSM {
 
 				@Override
 				public void startElement(final String uri, final String localName, final String qName,
-						final Attributes attributes) throws SAXException {
+						final Attributes attributes) {
 
 					if (qName.equals("node")) {
 						b_node = true;
@@ -674,9 +677,9 @@ public class OSM {
 								e_way.setAttribute("roundabout", "true");
 							}
 							// Number of lanes
-							if ((Settings.numLanesPerEdge == 0) && k.equals("lanes")) {
+							if ((settings.numLanesPerEdge == 0) && k.equals("lanes")) {
 								try {
-									final int numLanes = Integer.parseInt(v);
+									final int numLanes = (int) Double.parseDouble(v);
 									if (numLanes > 0) {
 										e_way.setAttribute("lanes", String.valueOf(numLanes));
 									}
@@ -723,25 +726,25 @@ public class OSM {
 									e_way.setAttribute("roundabout", "false");
 								}
 								if (!e_way.hasAttribute("lanes")) {
-									if (Settings.numLanesPerEdge == 0) {
+									if (settings.numLanesPerEdge == 0) {
 										e_way.setAttribute("lanes", String.valueOf(type.numLanes));
 									} else {
-										e_way.setAttribute("lanes", String.valueOf(Settings.numLanesPerEdge));
+										e_way.setAttribute("lanes", String.valueOf(settings.numLanesPerEdge));
 									}
 								}
 								if (!e_way.hasAttribute("rightLanes")) {
-									e_way.setAttribute("rightLanes", "1");//Set to 1 if only one lane can be used for straight or right turn
-									//e_way.setAttribute("rightLanes", e_way.getAttribute("lanes"));//Set to total number of lanes if vehicle can turn right from any lane
+									e_way.setAttribute("rightLanes", "1");
+									//									e_way.setAttribute("rightLanes", e_way.getAttribute("lanes"));
 								}
 								if (!e_way.hasAttribute("leftLanes")) {
-									e_way.setAttribute("leftLanes", "1");//Set to 1 if only one lane can be used for straight or left turn
-									//e_way.setAttribute("leftLanes", e_way.getAttribute("lanes"));//Set to total number of lanes if vehicle can turn left from any lane
+									e_way.setAttribute("leftLanes", "1");
+									//									e_way.setAttribute("leftLanes", e_way.getAttribute("lanes"));
 								}
 								if (!e_way.hasAttribute("rightOnlyLanes")) {
-									e_way.setAttribute("rightOnlyLanes", "0");//Set to a positive number if there are right-only (no straight) lanes
+									e_way.setAttribute("rightOnlyLanes", "0");
 								}
 								if (!e_way.hasAttribute("leftOnlyLanes")) {
-									e_way.setAttribute("leftOnlyLanes", "0");//Set to a positive number if there are left-only (no straight) lanes
+									e_way.setAttribute("leftOnlyLanes", "0");
 								}
 							}
 						}
@@ -771,7 +774,7 @@ public class OSM {
 			final File file = new File(filePath);
 			inputStream = new FileInputStream(file);
 
-			final Reader reader = new InputStreamReader(inputStream, "UTF-8");
+			final Reader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
 			final InputSource is = new InputSource(reader);
 			is.setEncoding("UTF-8");
 			saxParser.parse(is, handler);

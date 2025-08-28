@@ -2,37 +2,24 @@ package traffic;
 
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Random;
+import java.io.IOException;
+import java.util.*;
 
 import common.Settings;
+import processor.SimulationListener;
+import processor.communication.externalMessage.VehiclePathExternal;
 import processor.communication.message.SerializableExternalVehicle;
 import processor.communication.message.SerializableRouteLeg;
-import processor.worker.Fellow;
+import processor.communication.message.SerializableWorkerMetadata;
+import processor.worker.Workarea;
 import traffic.light.LightCoordinator;
-import traffic.road.Edge;
-import traffic.road.GridCell;
-import traffic.road.Lane;
-import traffic.road.Node;
-import traffic.road.RoadNetwork;
-import traffic.road.RoadType;
-import traffic.road.RoadUtil;
-import traffic.routing.Dijkstra;
-import traffic.routing.RandomAStar;
-import traffic.routing.ReferenceBasedSearch;
-import traffic.routing.RouteLeg;
-import traffic.routing.Routing;
-import traffic.routing.Simple;
+import traffic.light.TrafficLightTiming;
+import traffic.network.ODDemand;
+import traffic.road.*;
+import traffic.routing.*;
 import traffic.vehicle.DriverProfile;
-import traffic.vehicle.SlowdownFactor;
 import traffic.vehicle.Vehicle;
 import traffic.vehicle.VehicleType;
-import traffic.vehicle.VehicleUtil;
 
 /**
  * A trafficNetwork contains vehicles and traffic lights on top of a road
@@ -58,39 +45,24 @@ public class TrafficNetwork extends RoadNetwork {
 
 		@Override
 		public int compare(final Edge edge1, final Edge edge2) {
-			final Line2D.Double line1 = new Line2D.Double(edge1.startNode.lon,
-					edge1.startNode.lat * Settings.lonVsLat, edge1.endNode.lon,
-					edge1.endNode.lat * Settings.lonVsLat);
-			final double dist1 = line1.ptSegDist(node.lon, node.lat
-					* Settings.lonVsLat);
-			final Line2D.Double line2 = new Line2D.Double(edge2.startNode.lon,
-					edge2.startNode.lat * Settings.lonVsLat, edge2.endNode.lon,
-					edge2.endNode.lat * Settings.lonVsLat);
-			final double dist2 = line2.ptSegDist(node.lon, node.lat
-					* Settings.lonVsLat);
+			final Line2D.Double line1 = new Line2D.Double(edge1.startNode.lon, edge1.startNode.lat * settings.lonVsLat,
+					edge1.endNode.lon, edge1.endNode.lat * settings.lonVsLat);
+			final double dist1 = line1.ptSegDist(node.lon, node.lat * settings.lonVsLat);
+			final Line2D.Double line2 = new Line2D.Double(edge2.startNode.lon, edge2.startNode.lat * settings.lonVsLat,
+					edge2.endNode.lon, edge2.endNode.lat * settings.lonVsLat);
+			final double dist2 = line2.ptSegDist(node.lon, node.lat * settings.lonVsLat);
 			return dist1 < dist2 ? -1 : dist1 == dist2 ? 0 : 1;
 		}
 	}
 
-	/**
-	 * Comparator of vehicles based on their positions in a lane. The vehicle
-	 * closest to the end of the lane, will be the first element in the sorted
-	 * list.
-	 *
-	 */
-	public class VehiclePositionComparator implements Comparator<Vehicle> {
 
-		@Override
-		public int compare(final Vehicle v1, final Vehicle v2) {
-			return v1.headPosition > v2.headPosition ? -1
-					: v1.headPosition == v2.headPosition ? 0 : 1;
-		}
-	}
 
+	public Workarea workarea;
 	public ArrayList<Vehicle> vehicles = new ArrayList<>();
 
 	// For report data
 	public ArrayList<Vehicle> newVehiclesSinceLastReport = new ArrayList<>();
+	public ArrayList<Vehicle> newVehiclesforDemandEstimation = new ArrayList<>();
 	public HashMap<SerializableExternalVehicle, Double> externalVehicleRepeatPerStep = new HashMap<>();
 	ArrayList<Double> driverProfilePercAccumulated = new ArrayList<>();
 	ArrayList<Edge> internalTramStopEdges = new ArrayList<>();
@@ -100,17 +72,18 @@ public class TrafficNetwork extends RoadNetwork {
 	ArrayList<Edge> internalBusEndEdges = new ArrayList<>();
 	ArrayList<Edge> internalTramStartEdges = new ArrayList<>();
 	ArrayList<Edge> internalTramEndEdges = new ArrayList<>();
+	public ArrayList<Integer> laneIndexOfChangeDir = new ArrayList<>();
 	public Routing routingAlgorithm;
+	public RoutingAlgoFactory routingAlgoFactory;
+
+
 	Random random = new Random();
 	int numInternalVehicleAllTime = 0;
 	public int numInternalNonPublicVehicle = 0;
 	public int numInternalTram = 0;
 	public int numInternalBus = 0;
 	public LightCoordinator lightCoordinator = new LightCoordinator();
-	ArrayList<GridCell> workareaCells;
 	String internalVehiclePrefix = "";
-	VehicleUtil vehicleUtil = new VehicleUtil();
-	public VehiclePositionComparator vehiclePositionComparator = new VehiclePositionComparator();
 	double timeLastPublicVehicleCreated = 0;
 	ArrayList<String> internalTramRefInSdWindow = new ArrayList<>();
 
@@ -121,34 +94,57 @@ public class TrafficNetwork extends RoadNetwork {
 	HashMap<String, ArrayList<Edge>> internalBusStartEdgesInSourceWindow = new HashMap<>();
 
 	HashMap<String, ArrayList<Edge>> internalBusEndEdgesInDestinationWindow = new HashMap<>();
+	List<Vehicle> finishedVehicles = new ArrayList<>();
+
+	private PriorityQueue<Vehicle> tripMakingVehicles;
+
+	private ArrayList<VehiclePathExternal> paths = new ArrayList<>();
 
 	/**
 	 * Initialize traffic network.
 	 */
-	public TrafficNetwork() {
-		super();
+	public TrafficNetwork(Settings settings, String name, List<SerializableWorkerMetadata> metadataWorkers) {
+		super(settings);
+		this.internalVehiclePrefix = name;
+		setupWorkArea(name, metadataWorkers);
 		identifyInternalTramStopEdges();
 		addTramStopsToParallelNonTramEdges();
+		tripMakingVehicles = new PriorityQueue<>(getTripMakingVehicleComparator());
+		setCrossingIncreasingOrders();
+		routingAlgoFactory = new RoutingAlgoFactory();
+
+	}
+
+	private void setupWorkArea(String name, List<SerializableWorkerMetadata> metadataWorkers){
+		workarea = new Workarea(name, null);
+		for (final SerializableWorkerMetadata metadata : metadataWorkers) {
+			final ArrayList<GridCell> cellsInWorkarea = metadata.processReceivedGridCells(grid);
+			if (metadata.name.equals(name)) {
+				workarea.setWorkCells(cellsInWorkarea);
+				break;
+			}
+		}
 	}
 
 	public void clearReportedData() {
 		newVehiclesSinceLastReport.clear();
+		finishedVehicles.clear();
+		laneIndexOfChangeDir.clear();
 	}
 
 	/**
 	 * Create a new vehicle object and add it to the pool of vehicles.
 	 *
 	 */
-	void addNewVehicle(final VehicleType type, final boolean isExternal,
-			final boolean foreground, final ArrayList<RouteLeg> routeLegs,
-			final String idPrefix, final double timeRouteStart,
-			final String externalId, final DriverProfile dP) {
+	void addNewVehicle(final VehicleType type, final boolean isExternal, final boolean foreground, Node start, Node end,
+			List<RouteLeg> routeLegs, final String idPrefix, final double timeRouteStart,
+			final String externalId, final int vid, final DriverProfile dP) {
 		// Do not proceed if the route is empty
-		if (routeLegs.size() < 1) {
+		/*if (routeLegs.size() < 1) {
 			return;
-		}
+		}*///TODO if the start and end is not reachable it should be handled
 		// Create new vehicle
-		final Vehicle vehicle = new Vehicle();
+		final Vehicle vehicle = new Vehicle(settings);
 		// Creation time
 		vehicle.timeRouteStart = timeRouteStart;
 		// Jam start time
@@ -161,15 +157,26 @@ public class TrafficNetwork extends RoadNetwork {
 		vehicle.isExternal = isExternal;
 		// Length of vehicle
 		vehicle.length = type.length;
+		vehicle.setStart(start);
+		vehicle.setEnd(end);
 		// Legs of route
-		vehicle.routeLegs = routeLegs;
+		vehicle.setRouteLegs(routeLegs);
 		// Driver profile
 		vehicle.driverProfile = dP;
 		// Set as active
 		vehicle.active = true;
 		// Add vehicle to system
+
+		if (Math.random() <= settings.cavPercentage)
+			vehicle.setCAV(true);
+		else {
+			vehicle.setConnectedV(true);
+			vehicle.setCAV(false);
+		}
+
+		vehicle.setHeadWayMultiplier(settings.safetyHeadwayMultiplier);
 		if (!vehicle.isExternal) {
-			// Update vehicle counters
+			// Update vehicle counters				
 			numInternalVehicleAllTime++;
 			if (type == VehicleType.TRAM) {
 				numInternalTram++;
@@ -180,30 +187,29 @@ public class TrafficNetwork extends RoadNetwork {
 			}
 			// Assign vehicle ID
 			vehicle.id = idPrefix + Long.toString(numInternalVehicleAllTime);
+			vehicle.vid = numInternalVehicleAllTime;
 			// Add vehicle to system
 			vehicles.add(vehicle);
-
-			parkOneVehicle(vehicle, true, timeRouteStart);
+			tripMakingVehicles.add(vehicle);
+			//vehicle.park(true, timeRouteStart);
 		} else {
 			// Add external vehicle to system
 			vehicle.id = externalId;
+			vehicle.vid = vid;
 			vehicles.add(vehicle);
-			parkOneVehicle(vehicle, true, timeRouteStart);
+			tripMakingVehicles.add(vehicle);
+			//vehicle.park(true, timeRouteStart);
 		}
-
-		// Certain information about this vehicle will be reported to server
-		newVehiclesSinceLastReport.add(vehicle);
 	}
 
 	/**
 	 * Add an existing vehicle object to traffic network. The vehicle object is
 	 * transferred from a neighbor worker.
 	 */
-	public void addOneTransferredVehicle(final Vehicle vehicle,
-			final double timeNow) {
+	public void addOneTransferredVehicle(final Vehicle vehicle, final double timeNow) {
 		vehicle.active = true;
 		vehicles.add(vehicle);
-		vehicle.lane.vehicles.add(vehicle);
+		vehicle.lane.addVehicleToLane(vehicle);
 		if (!vehicle.isExternal) {
 			if (vehicle.type == VehicleType.TRAM) {
 				numInternalTram++;
@@ -213,8 +219,8 @@ public class TrafficNetwork extends RoadNetwork {
 				numInternalNonPublicVehicle++;
 			}
 		}
-		if (vehicle.routeLegs.get(vehicle.indexLegOnRoute).stopover > 0) {
-			parkOneVehicle(vehicle, false, timeNow);
+		if (vehicle.getCurrentLeg().stopover > 0) {
+			vehicle.park(false, timeNow);
 		}
 	}
 
@@ -226,39 +232,28 @@ public class TrafficNetwork extends RoadNetwork {
 	void addTramStopsToParallelNonTramEdges() {
 		ArrayList<Edge> candidateEdges = new ArrayList<>();
 		for (final Edge tramEdge : internalTramStopEdges) {
-			candidateEdges = getEdgesParallelToEdge(tramEdge.startNode.lat,
-					tramEdge.startNode.lon, tramEdge.endNode.lat,
-					tramEdge.endNode.lon);
-			final NearbyEdgeComparator parallelEdgeComparator = new NearbyEdgeComparator(
-					tramEdge.endNode);
+			candidateEdges = getEdgesParallelToEdge(tramEdge.startNode.lat, tramEdge.startNode.lon,
+					tramEdge.endNode.lat, tramEdge.endNode.lon);
+			final NearbyEdgeComparator parallelEdgeComparator = new NearbyEdgeComparator(tramEdge.endNode);
 			Collections.sort(candidateEdges, parallelEdgeComparator);
-			// Foot of perpendicular from tram edge must be within the candidate
-			// edge
+			// Foot of perpendicular from tram edge must be within the candidate edge
 			for (final Edge candidateEdge : candidateEdges) {
 				if (candidateEdge.type == RoadType.tram) {
 					continue;
 				}
 
-				final Line2D.Double line = new Line2D.Double(
-						candidateEdge.startNode.lon,
-						candidateEdge.startNode.lat * Settings.lonVsLat,
-						candidateEdge.endNode.lon, candidateEdge.endNode.lat
-								* Settings.lonVsLat);
-				final double distSq_StopToLine = line.ptSegDistSq(
-						tramEdge.endNode.lon, tramEdge.endNode.lat
-								* Settings.lonVsLat);
-				final double distSq_StopToLineStart = Point2D.distanceSq(
-						tramEdge.endNode.lon, tramEdge.endNode.lat
-								* Settings.lonVsLat,
-						candidateEdge.startNode.lon,
-						candidateEdge.startNode.lat * Settings.lonVsLat);
-				final double dist_StartToClosestPoint = Math
-						.sqrt(distSq_StopToLineStart - distSq_StopToLine);
-				final double dist_StartToEnd = Point2D.distance(
-						candidateEdge.startNode.lon,
-						candidateEdge.startNode.lat * Settings.lonVsLat,
-						candidateEdge.endNode.lon, candidateEdge.endNode.lat
-								* Settings.lonVsLat);
+				final Line2D.Double line = new Line2D.Double(candidateEdge.startNode.lon,
+						candidateEdge.startNode.lat * settings.lonVsLat, candidateEdge.endNode.lon,
+						candidateEdge.endNode.lat * settings.lonVsLat);
+				final double distSq_StopToLine = line.ptSegDistSq(tramEdge.endNode.lon,
+						tramEdge.endNode.lat * settings.lonVsLat);
+				final double distSq_StopToLineStart = Point2D.distanceSq(tramEdge.endNode.lon,
+						tramEdge.endNode.lat * settings.lonVsLat, candidateEdge.startNode.lon,
+						candidateEdge.startNode.lat * settings.lonVsLat);
+				final double dist_StartToClosestPoint = Math.sqrt(distSq_StopToLineStart - distSq_StopToLine);
+				final double dist_StartToEnd = Point2D.distance(candidateEdge.startNode.lon,
+						candidateEdge.startNode.lat * settings.lonVsLat, candidateEdge.endNode.lon,
+						candidateEdge.endNode.lat * settings.lonVsLat);
 				final double ratio = dist_StartToClosestPoint / dist_StartToEnd;
 				if ((ratio >= 0) && (ratio <= 1)) {
 					candidateEdge.distToTramStop = candidateEdge.length * ratio;
@@ -273,34 +268,23 @@ public class TrafficNetwork extends RoadNetwork {
 	/**
 	 * Initialize traffic network in work area and certain global settings.
 	 */
-	public void buildEnvironment(final ArrayList<GridCell> cells,
-			final String internalVehiclePrefix, final int stepCurrent) {
-
-		workareaCells = cells;
-		this.internalVehiclePrefix = internalVehiclePrefix;
-
+	public void buildEnvironment() {
 		identifyInternalVehicleRouteStartEndEdges();
 		identifyReferencesOfAllPublicTransportTypesInSourceDestinationWindow();
 		computeAccumulatedDriverProfileDistribution();
 
-		if (Settings.routingAlgorithm == Routing.Algorithm.DIJKSTRA) {
-			routingAlgorithm = new Dijkstra(this);
-		} else if (Settings.routingAlgorithm == Routing.Algorithm.RANDOM_A_STAR) {
-			routingAlgorithm = new RandomAStar(this);
-		} else if (Settings.routingAlgorithm == Routing.Algorithm.SIMPLE) {
-			routingAlgorithm = new Simple(this);
-		}
+		routingAlgorithm = routingAlgoFactory.getRoutingAlgo(settings.routingAlgorithm, this);
 
 	}
 
 	void computeAccumulatedDriverProfileDistribution() {
 		driverProfilePercAccumulated = new ArrayList<>();
 		double total = 0;
-		for (final Double d : Settings.driverProfileDistribution) {
+		for (final Double d : settings.driverProfileDistribution) {
 			total += d;
 		}
 		double accumulated = 0;
-		for (final Double d : Settings.driverProfileDistribution) {
+		for (final Double d : settings.driverProfileDistribution) {
 			accumulated += d;
 			driverProfilePercAccumulated.add(accumulated / total);
 		}
@@ -310,23 +294,18 @@ public class TrafficNetwork extends RoadNetwork {
 	 * Create vehicles based on external routes imported during setup.
 	 *
 	 */
-	public void createExternalVehicles(
-			final ArrayList<SerializableExternalVehicle> externalRoutes,
+	public void createExternalVehicles(final ArrayList<SerializableExternalVehicle> externalRoutes,
 			final double timeNow) {
 		for (final SerializableExternalVehicle vehicle : externalRoutes) {
-			final VehicleType type = VehicleType
-					.getVehicleTypeFromName(vehicle.vehicleType);
+			final VehicleType type = VehicleType.getVehicleTypeFromName(vehicle.vehicleType);
 			if (vehicle.numberRepeatPerSecond <= 0) {
-				addNewVehicle(type, true, vehicle.foreground,
-						createOneRouteFromSerializedData(vehicle.route), "",
-						vehicle.startTime, vehicle.id,
-						DriverProfile.valueOf(vehicle.driverProfile));
+				List<RouteLeg> routeLegs = createOneRouteFromSerializedData(vehicle.route, type);
+				addNewVehicle(type, true, vehicle.foreground, routeLegs.get(0).edge.startNode,
+						routeLegs.get(routeLegs.size()-1).edge.endNode, routeLegs , "",
+						vehicle.startTime, vehicle.id, vehicle.vid, DriverProfile.valueOf(vehicle.driverProfile));
 			} else {
-				// This is a simple way to get number of vehicles per step. The
-				// result number
-				// may be inaccurate.
-				final double numRepeatPerStep = vehicle.numberRepeatPerSecond
-						/ Settings.numStepsPerSecond;
+				// This is a simple way to get number of vehicles per step. The result number may be inaccurate.
+				final double numRepeatPerStep = vehicle.numberRepeatPerSecond / settings.numStepsPerSecond;
 				externalVehicleRepeatPerStep.put(vehicle, numRepeatPerStep);
 			}
 		}
@@ -337,29 +316,28 @@ public class TrafficNetwork extends RoadNetwork {
 	 * 
 	 * @param isNewNonPubVehiclesAllowed
 	 */
-	void createInternalNonPublicVehicles(int numLocalRandomPrivateVehicles,
-			final double timeNow, boolean isNewNonPubVehiclesAllowed) {
+	void createInternalNonPublicVehicles(int numLocalRandomPrivateVehicles, final double timeNow,
+			boolean isNewNonPubVehiclesAllowed) {
 		if (isNewNonPubVehiclesAllowed) {
-			final int numVehiclesNeeded = numLocalRandomPrivateVehicles
-					- numInternalNonPublicVehicle;
-			for (int i = 0; i < numVehiclesNeeded; i++) {
-				final double typeDecider = random.nextDouble();
-				VehicleType type = null;
-				if (typeDecider < 0.05) {
-					type = VehicleType.BIKE;
-				} else if ((0.05 <= typeDecider) && (typeDecider < 0.1)) {
-					type = VehicleType.TRUCK;
-				} else {
-					type = VehicleType.CAR;
+
+			ArrayList<ODDemand> traffic = null;
+			try {
+				traffic = settings.getTrafficGenerator().getGeneratedTraffic(this,
+						internalNonPublicVehicleStartEdges, internalNonPublicVehicleEndEdges, (int) (timeNow*settings.numStepsPerSecond));
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+			for (ODDemand odpair : traffic){
+				final int numVehiclesNeeded = odpair.getNumVehicles();
+				for (int i = 0; i < numVehiclesNeeded; i++) { ;
+
+					addNewVehicle(odpair.getVehicleType(), false, false, odpair.getOrigin(), odpair.getDestination(), null, internalVehiclePrefix, timeNow, "", -1,
+							DriverProfile.NORMAL);
 				}
-				ArrayList<RouteLeg> route = createOneRandomInternalRoute(type);
-				if (route != null) {
-					addNewVehicle(type, false, false, route,
-							internalVehiclePrefix, timeNow, "",
-							getRandomDriverProfile());
 				}
 			}
-		}
+
 	}
 
 	/**
@@ -371,8 +349,7 @@ public class TrafficNetwork extends RoadNetwork {
 	 * @param isNewBusesAllowed
 	 * @param isNewTramsAllowed
 	 */
-	void createInternalPublicVehicles(int numLocalRandomTrams,
-			int numLocalRandomBuses, boolean isNewTramsAllowed,
+	void createInternalPublicVehicles(int numLocalRandomTrams, int numLocalRandomBuses, boolean isNewTramsAllowed,
 			boolean isNewBusesAllowed, final double timeNow) {
 		if (isNewTramsAllowed) {
 			int numTramsNeeded = numLocalRandomTrams - numInternalTram;
@@ -399,100 +376,83 @@ public class TrafficNetwork extends RoadNetwork {
 	 * @param isNewTramsAllowed
 	 * @param isNewNonPubVehiclesAllowed
 	 */
-	public void createInternalVehicles(int numLocalRandomPrivateVehicles,
-			int numLocalRandomTrams, int numLocalRandomBuses,
-			boolean isNewNonPubVehiclesAllowed, boolean isNewTramsAllowed,
+	public void createInternalVehicles(int numLocalRandomPrivateVehicles, int numLocalRandomTrams,
+			int numLocalRandomBuses, boolean isNewNonPubVehiclesAllowed, boolean isNewTramsAllowed,
 			boolean isNewBusesAllowed, final double timeNow) {
-		if ((internalNonPublicVehicleStartEdges.size() > 0)
-				&& (internalNonPublicVehicleEndEdges.size() > 0)) {
-			createInternalNonPublicVehicles(numLocalRandomPrivateVehicles,
-					timeNow, isNewNonPubVehiclesAllowed);
+		if ((internalNonPublicVehicleStartEdges.size() > 0) && (internalNonPublicVehicleEndEdges.size() > 0) && ( timeNow%settings.demandGenerationTimeInterval == 0 )) { //TODO: shift to 90
+			createInternalNonPublicVehicles(numLocalRandomPrivateVehicles, timeNow, isNewNonPubVehiclesAllowed);
 		}
-		createInternalPublicVehicles(numLocalRandomTrams, numLocalRandomBuses,
-				isNewTramsAllowed, isNewBusesAllowed, timeNow);
+		//createInternalPublicVehicles(numLocalRandomTrams, numLocalRandomBuses, isNewTramsAllowed, isNewBusesAllowed,
+		//		timeNow);
 	}
 
-	void createOneInternalPublicVehicle(final VehicleType type,
-			final double timeNow) {
+	void createOneInternalPublicVehicle(final VehicleType type, final double timeNow) {
 		VehicleType transport = null;
 		String randomRef = null;
 		ArrayList<Edge> startEdgesOfRandomRoute = null;
 		ArrayList<Edge> endEdgesOfRandomRoute = null;
-		if ((type == VehicleType.TRAM)
-				&& (internalTramRefInSdWindow.size() > 0)) {
+		if ((type == VehicleType.TRAM) && (internalTramRefInSdWindow.size() > 0)) {
 			transport = VehicleType.TRAM;
-			randomRef = internalTramRefInSdWindow.get(random
-					.nextInt(internalTramRefInSdWindow.size()));
-			startEdgesOfRandomRoute = internalTramStartEdgesInSourceWindow
-					.get(randomRef);
-			endEdgesOfRandomRoute = internalTramEndEdgesInDestinationWindow
-					.get(randomRef);
-		} else if ((type == VehicleType.BUS)
-				&& (internalBusRefInSourceDestinationWindow.size() > 0)) {
+			randomRef = internalTramRefInSdWindow.get(random.nextInt(internalTramRefInSdWindow.size()));
+			startEdgesOfRandomRoute = internalTramStartEdgesInSourceWindow.get(randomRef);
+			endEdgesOfRandomRoute = internalTramEndEdgesInDestinationWindow.get(randomRef);
+		} else if ((type == VehicleType.BUS) && (internalBusRefInSourceDestinationWindow.size() > 0)) {
 			transport = VehicleType.BUS;
-			randomRef = internalBusRefInSourceDestinationWindow.get(random
-					.nextInt(internalBusRefInSourceDestinationWindow.size()));
-			startEdgesOfRandomRoute = internalBusStartEdgesInSourceWindow
-					.get(randomRef);
-			endEdgesOfRandomRoute = internalBusEndEdgesInDestinationWindow
-					.get(randomRef);
+			randomRef = internalBusRefInSourceDestinationWindow
+					.get(random.nextInt(internalBusRefInSourceDestinationWindow.size()));
+			startEdgesOfRandomRoute = internalBusStartEdgesInSourceWindow.get(randomRef);
+			endEdgesOfRandomRoute = internalBusEndEdgesInDestinationWindow.get(randomRef);
 		}
 
-		if ((startEdgesOfRandomRoute == null)
-				|| (endEdgesOfRandomRoute == null)) {
+		if ((startEdgesOfRandomRoute == null) || (endEdgesOfRandomRoute == null)) {
 			return;
 		}
 
-		ArrayList<RouteLeg> route = ReferenceBasedSearch.createRoute(transport,
-				randomRef, startEdgesOfRandomRoute, endEdgesOfRandomRoute);
+		ArrayList<RouteLeg> route = ReferenceBasedSearch.createRoute(transport, randomRef, startEdgesOfRandomRoute,
+				endEdgesOfRandomRoute);
 		for (int numTry = 0; numTry < 10; numTry++) {
 			if (route == null) {
-				route = ReferenceBasedSearch.createRoute(transport, randomRef,
-						startEdgesOfRandomRoute, endEdgesOfRandomRoute);
+				route = ReferenceBasedSearch.createRoute(transport, randomRef, startEdgesOfRandomRoute,
+						endEdgesOfRandomRoute);
 			} else {
 				break;
 			}
 		}
-		if (route != null) {
-			addNewVehicle(type, false, false, route, internalVehiclePrefix,
-					timeNow, "", getRandomDriverProfile());
-		}
+		Node start = route.get(0).edge.startNode;
+		Node end = route.get(route.size()-1).edge.endNode;
+		addNewVehicle(type, false, false, start, end, route, internalVehiclePrefix, timeNow, "", -1, getRandomDriverProfile());
 	}
-
-	
 
 	/**
 	 * Generate a route.
-	 *
-	 * @param workarea
-	 * @param strategy
+	 * @param type
+	 * @return
 	 */
-	ArrayList<RouteLeg> createOneRandomInternalRoute(final VehicleType type) {
-		final Edge edgeStart = internalNonPublicVehicleStartEdges.get(random
-				.nextInt(internalNonPublicVehicleStartEdges.size()));
+	/*ArrayList<RouteLeg> createOneRandomInternalRoute(final VehicleType type) {
 
-		final Edge edgeEnd = internalNonPublicVehicleEndEdges.get(random
-				.nextInt(internalNonPublicVehicleEndEdges.size()));
 
-		final ArrayList<RouteLeg> route = routingAlgorithm.createCompleteRoute(
-				edgeStart, edgeEnd, type);
+		final ArrayList<RouteLeg> route = routingAlgorithm.createCompleteRoute(edges[0], edges[1], type);
 
 		if ((route == null) || (route.size() == 0)) {
 			return null;
 		} else {
 			return route;
 		}
-	}
+	}*/
 
-	ArrayList<RouteLeg> createOneRouteFromSerializedData(
-			final ArrayList<SerializableRouteLeg> serializedData) {
-		final ArrayList<RouteLeg> route = new ArrayList<>(1000);
-		for (final SerializableRouteLeg sLeg : serializedData) {
-			final RouteLeg leg = new RouteLeg(edges.get(sLeg.edgeIndex),
-					sLeg.stopover);
-			route.add(leg);
+	ArrayList<RouteLeg> createOneRouteFromSerializedData(final ArrayList<SerializableRouteLeg> serializedData, VehicleType type) {
+		if(settings.inputOnlyODPairsOfForegroundVehicleFile){
+			SerializableRouteLeg legStart = serializedData.get(0);
+			SerializableRouteLeg legEnd = serializedData.get(serializedData.size()-1);
+			return routingAlgorithm.createCompleteRoute(edges.get(legStart.edgeIndex).startNode, edges.get(legEnd.edgeIndex).endNode, type);
+		}else {
+			final ArrayList<RouteLeg> route = new ArrayList<>(1000);
+			for (final SerializableRouteLeg sLeg : serializedData) {
+				final RouteLeg leg = new RouteLeg(edges.get(sLeg.edgeIndex), sLeg.stopover);
+				route.add(leg);
+			}
+			return route;
 		}
-		return route;
 	}
 
 	DriverProfile getRandomDriverProfile() {
@@ -505,80 +465,7 @@ public class TrafficNetwork extends RoadNetwork {
 		return DriverProfile.NORMAL;
 	}
 
-	/**
-	 * This method tries to find a start position for a vehicle such that the
-	 * vehicle will be unlikely to collide with an existing vehicle. For
-	 * simplicity, this method only checks the current route leg and the two
-	 * adjacent legs. Therefore it is not guaranteed that the new position is
-	 * safe, especially when all the three legs are very short.
-	 */
-	double getStartPositionInLane0(final Vehicle vehicle) {
-		Edge currentEdge = vehicle.routeLegs.get(vehicle.indexLegOnRoute).edge;
 
-		double headPosSpaceFront = currentEdge.length;
-
-		if (vehicle.indexLegOnRoute + 1 < vehicle.routeLegs.size()) {
-			RouteLeg legToCheck = vehicle.routeLegs
-					.get(vehicle.indexLegOnRoute + 1);
-			Lane laneToCheck = legToCheck.edge.lanes.get(0);
-			if (laneToCheck.vehicles.size() > 0) {
-				Vehicle vehicleToCheck = laneToCheck.vehicles
-						.get(laneToCheck.vehicles.size() - 1);
-				double endPosOfLastVehicleOnNextLeg = vehicleToCheck.headPosition
-						+ currentEdge.length - vehicleToCheck.length;
-				if (endPosOfLastVehicleOnNextLeg < headPosSpaceFront) {
-					headPosSpaceFront = endPosOfLastVehicleOnNextLeg;
-				}
-			}
-		}
-
-		double headPosSpaceBack = 0;
-
-		if (vehicle.indexLegOnRoute > 0) {
-			RouteLeg legToCheck = vehicle.routeLegs
-					.get(vehicle.indexLegOnRoute - 1);
-			Lane laneToCheck = legToCheck.edge.lanes.get(0);
-			if (laneToCheck.vehicles.size() > 0) {
-				Vehicle vehicleToCheck = laneToCheck.vehicles.get(0);
-				double headPosOfFirstVehicleOnPreviousLeg = -(laneToCheck.edge.length - vehicleToCheck.headPosition);
-				if (headPosSpaceBack - vehicle.length < headPosOfFirstVehicleOnPreviousLeg) {
-					headPosSpaceBack = headPosOfFirstVehicleOnPreviousLeg
-							+ vehicle.length;
-				}
-			}
-		}
-
-		if (headPosSpaceFront <= headPosSpaceBack)
-			return -1;
-
-		final ArrayList<double[]> gaps = new ArrayList<>();
-		if (currentEdge.lanes.get(0).vehicles.size() > 0) {
-
-			double gapFront = headPosSpaceFront;
-			for (Vehicle vehicleToCheck : currentEdge.lanes.get(0).vehicles) {
-				if (gapFront - vehicle.length > vehicleToCheck.headPosition) {
-					gaps.add(new double[] { gapFront,
-							vehicleToCheck.headPosition + vehicle.length });
-				}
-				gapFront = vehicleToCheck.headPosition - vehicleToCheck.length;
-				if (gapFront < headPosSpaceBack) {
-					break;
-				}
-			}
-		} else {
-			gaps.add(new double[] { headPosSpaceFront, headPosSpaceBack });
-		}
-
-		if (gaps.size() == 0) {
-			return -1;
-		} else {
-			// Pick a random position within a random gap
-			final double[] gap = gaps.get(random.nextInt(gaps.size()));
-			final double pos = gap[0]
-					- (random.nextDouble() * (gap[0] - gap[1]));
-			return pos;
-		}
-	}
 
 	/**
 	 * Collect the edges that are used by tram and whose end points are tram
@@ -607,20 +494,17 @@ public class TrafficNetwork extends RoadNetwork {
 		internalTramEndEdges.clear();
 
 		// Start edges within workarea
-		for (final GridCell cell : workareaCells) {
+		for (final GridCell cell : workarea.workCells) {
 			for (final Node node : cell.nodes) {
-				if (((Settings.listRouteSourceWindowForInternalVehicle.size() == 0) && (Settings.listRouteSourceDestinationWindowForInternalVehicle
-						.size() == 0))
-						|| ((Settings.listRouteSourceWindowForInternalVehicle
-								.size() > 0) && isNodeInsideRectangle(
-								node,
-								Settings.listRouteSourceWindowForInternalVehicle))
-						|| ((Settings.listRouteSourceDestinationWindowForInternalVehicle
-								.size() > 0) && isNodeInsideRectangle(
-								node,
-								Settings.listRouteSourceDestinationWindowForInternalVehicle))) {
+				if (((settings.listRouteSourceWindowForInternalVehicle.size() == 0)
+						&& (settings.listRouteSourceDestinationWindowForInternalVehicle.size() == 0))
+						|| ((settings.listRouteSourceWindowForInternalVehicle.size() > 0)
+								&& isNodeInsideRectangle(node, settings.listRouteSourceWindowForInternalVehicle))
+						|| ((settings.listRouteSourceDestinationWindowForInternalVehicle.size() > 0)
+								&& isNodeInsideRectangle(node,
+										settings.listRouteSourceDestinationWindowForInternalVehicle))) {
 					for (final Edge edge : node.outwardEdges) {
-						if (isEdgeSuitableForRouteStartOfInternalVehicle(edge)) {
+						if (edge.isSuitableForRouteStartOfInternalVehicle(workarea.workCells, settings.minLengthOfRouteStartEndEdge)) {
 							if (edge.type != RoadType.tram) {
 								internalNonPublicVehicleStartEdges.add(edge);
 								if (edge.busRoutesRef.size() > 0) {
@@ -639,17 +523,14 @@ public class TrafficNetwork extends RoadNetwork {
 
 		// End edges (can be anywhere in road network)
 		for (final Edge edge : edges) {
-			if (((Settings.listRouteDestinationWindowForInternalVehicle.size() == 0) && (Settings.listRouteSourceDestinationWindowForInternalVehicle
-					.size() == 0))
-					|| ((Settings.listRouteDestinationWindowForInternalVehicle
-							.size() > 0) && isNodeInsideRectangle(
-							edge.endNode,
-							Settings.listRouteDestinationWindowForInternalVehicle))
-					|| ((Settings.listRouteSourceDestinationWindowForInternalVehicle
-							.size() > 0) && isNodeInsideRectangle(
-							edge.endNode,
-							Settings.listRouteSourceDestinationWindowForInternalVehicle))) {
-				if (isEdgeSuitableForRouteEndOfInternalVehicle(edge)) {
+			if (((settings.listRouteDestinationWindowForInternalVehicle.size() == 0)
+					&& (settings.listRouteSourceDestinationWindowForInternalVehicle.size() == 0))
+					|| ((settings.listRouteDestinationWindowForInternalVehicle.size() > 0) && isNodeInsideRectangle(
+							edge.endNode, settings.listRouteDestinationWindowForInternalVehicle))
+					|| ((settings.listRouteSourceDestinationWindowForInternalVehicle.size() > 0)
+							&& isNodeInsideRectangle(edge.endNode,
+									settings.listRouteSourceDestinationWindowForInternalVehicle))) {
+				if (edge.isSuitableForRouteEndOfInternalVehicle(settings.minLengthOfRouteStartEndEdge)) {
 					if (edge.type != RoadType.tram) {
 						internalNonPublicVehicleEndEdges.add(edge);
 						if (edge.busRoutesRef.size() > 0) {
@@ -670,34 +551,27 @@ public class TrafficNetwork extends RoadNetwork {
 	 * Identifying edges for public transport.
 	 */
 	void identifyReferencesOfAllPublicTransportTypesInSourceDestinationWindow() {
-		identifyReferencesOfOnePublicTransportTypeInSourceDestinationWindow(
-				internalTramRefInSdWindow, tramRoutes, internalTramStartEdges,
-				internalTramEndEdges, internalTramStartEdgesInSourceWindow,
+		identifyReferencesOfOnePublicTransportTypeInSourceDestinationWindow(internalTramRefInSdWindow, tramRoutes,
+				internalTramStartEdges, internalTramEndEdges, internalTramStartEdgesInSourceWindow,
 				internalTramEndEdgesInDestinationWindow);
-		identifyReferencesOfOnePublicTransportTypeInSourceDestinationWindow(
-				internalBusRefInSourceDestinationWindow, busRoutes,
-				internalBusStartEdges, internalBusEndEdges,
-				internalBusStartEdgesInSourceWindow,
+		identifyReferencesOfOnePublicTransportTypeInSourceDestinationWindow(internalBusRefInSourceDestinationWindow,
+				busRoutes, internalBusStartEdges, internalBusEndEdges, internalBusStartEdgesInSourceWindow,
 				internalBusEndEdgesInDestinationWindow);
 	}
 
 	/**
 	 * Collect the edges on tram routes that overlap with this work area.
 	 */
-	void identifyReferencesOfOnePublicTransportTypeInSourceDestinationWindow(
-			final ArrayList<String> refsInSdWindow,
-			final HashMap<String, ArrayList<Edge>> referencedRoutes,
-			final ArrayList<Edge> routeStartEdges,
-			final ArrayList<Edge> routeEndEdges,
-			final HashMap<String, ArrayList<Edge>> routeStartEdgesInSourceWindow,
+	void identifyReferencesOfOnePublicTransportTypeInSourceDestinationWindow(final ArrayList<String> refsInSdWindow,
+			final HashMap<String, ArrayList<Edge>> referencedRoutes, final ArrayList<Edge> routeStartEdges,
+			final ArrayList<Edge> routeEndEdges, final HashMap<String, ArrayList<Edge>> routeStartEdgesInSourceWindow,
 			final HashMap<String, ArrayList<Edge>> routeEndEdgesInDestinationWindow) {
 		refsInSdWindow.clear();
 		final Iterator it = referencedRoutes.entrySet().iterator();
 		while (it.hasNext()) {
 			final Map.Entry pairs = (Map.Entry) it.next();
 			final String ref = (String) pairs.getKey();
-			final ArrayList<Edge> edgesOnOneRoute = (ArrayList<Edge>) pairs
-					.getValue();
+			final ArrayList<Edge> edgesOnOneRoute = (ArrayList<Edge>) pairs.getValue();
 			final ArrayList<Edge> startEdgesOnOneRoute = new ArrayList<>();
 			final ArrayList<Edge> endEdgesOnOneRoute = new ArrayList<>();
 			boolean isStartCovered = false;
@@ -714,8 +588,8 @@ public class TrafficNetwork extends RoadNetwork {
 					endEdgesOnOneRoute.add(edge);
 				}
 			}
-			if (isStartCovered && (startEdgesOnOneRoute.size() > 0)
-					&& isEndCovered && (endEdgesOnOneRoute.size() > 0)) {
+			if (isStartCovered && (startEdgesOnOneRoute.size() > 0) && isEndCovered
+					&& (endEdgesOnOneRoute.size() > 0)) {
 				refsInSdWindow.add(ref);
 				routeStartEdgesInSourceWindow.put(ref, startEdgesOnOneRoute);
 				routeEndEdgesInDestinationWindow.put(ref, endEdgesOnOneRoute);
@@ -723,62 +597,18 @@ public class TrafficNetwork extends RoadNetwork {
 		}
 	}
 
-	boolean isEdgeSuitableForRouteEndOfInternalVehicle(final Edge edge) {
-		if ((edge == null)
-				|| (edge.length < Settings.minLengthOfRouteStartEndEdge)
-				|| edge.isRoundabout) {
-			return false;
-		}
-		return true;
-	}
 
-	boolean isEdgeSuitableForRouteStartOfInternalVehicle(final Edge edge) {
-		// Note: route cannot start from cross-border edge at the starting side
-		// of the
-		// edge. This is to prevent problem in transferring of vehicle.
-		if ((edge == null)
-				|| (edge.length < Settings.minLengthOfRouteStartEndEdge)
-				|| edge.isRoundabout
-				|| !workareaCells.contains(edge.endNode.gridCell)) {
-			return false;
-		}
 
-		return true;
-	}
 
-	/**
-	 * Moves vehicle to parking.
-	 */
-	public void parkOneVehicle(final Vehicle vehicle,
-			final boolean isNewVehicle, final double timeNow) {
-		vehicle.speed = 0;
-		vehicle.acceleration = 0;
-		vehicle.routeLegs.get(vehicle.indexLegOnRoute).edge.parkedVehicles
-				.add(vehicle);
-		if (isNewVehicle) {
-			vehicle.earliestTimeToLeaveParking = vehicle.timeRouteStart
-					+ vehicle.routeLegs.get(0).stopover;
-		} else {
-			vehicle.earliestTimeToLeaveParking = timeNow
-					+ vehicle.routeLegs.get(vehicle.indexLegOnRoute).stopover;
-		}
-		if (vehicle.lane != null) {
-			vehicle.lane.vehicles.remove(vehicle);
-			vehicle.lane = null;
-		}
-	}
 
 	/**
 	 * Remove vehicles from their lanes and the whole traffic network.
 	 */
-	public void removeActiveVehicles(
-			final ArrayList<Vehicle> vehiclesToBeRemoved) {
+	public void removeActiveVehicles(final ArrayList<Vehicle> vehiclesToBeRemoved) {
 
 		for (final Vehicle v : vehiclesToBeRemoved) {
 			// Cancel priority lanes
-			if (v.type == VehicleType.PRIORITY) {
-				VehicleUtil.setPriorityLanes(v, false);
-			}
+			v.setPriorityLanes(false);
 
 			// Makes vehicle inactive
 			v.active = false;
@@ -786,7 +616,7 @@ public class TrafficNetwork extends RoadNetwork {
 			 * Remove vehicles from old lanes
 			 */
 			if (v.lane != null) {
-				v.lane.vehicles.remove(v);
+				v.lane.removeVehicle(v);
 			}
 			/*
 			 * Remove vehicle from the traffic network on this worker
@@ -808,10 +638,8 @@ public class TrafficNetwork extends RoadNetwork {
 	}
 
 	public void repeatExternalVehicles(final int step, final double timeNow) {
-		for (final SerializableExternalVehicle vehicle : externalVehicleRepeatPerStep
-				.keySet()) {
-			double numRepeatThisStep = externalVehicleRepeatPerStep
-					.get(vehicle);
+		for (final SerializableExternalVehicle vehicle : externalVehicleRepeatPerStep.keySet()) {
+			double numRepeatThisStep = externalVehicleRepeatPerStep.get(vehicle);
 			if (externalVehicleRepeatPerStep.get(vehicle) < 1.0) {
 				final int numStepsPerRepeat = (int) (1.0 / numRepeatThisStep);
 				if ((step % numStepsPerRepeat) == 0) {
@@ -822,14 +650,13 @@ public class TrafficNetwork extends RoadNetwork {
 			}
 
 			for (int i = 0; i < (int) numRepeatThisStep; i++) {
-				final VehicleType type = VehicleType
-						.getVehicleTypeFromName(vehicle.vehicleType);
-				final DriverProfile profile = DriverProfile
-						.valueOf(vehicle.driverProfile);
-				addNewVehicle(type, true, vehicle.foreground,
-						createOneRouteFromSerializedData(vehicle.route), "",
-						timeNow, vehicle.id + "_time_" + timeNow + "_" + i,
-						profile);
+				final VehicleType type = VehicleType.getVehicleTypeFromName(vehicle.vehicleType);
+				final DriverProfile profile = DriverProfile.valueOf(vehicle.driverProfile);
+				List<RouteLeg> route = createOneRouteFromSerializedData(vehicle.route, type);
+				Node start = route.get(0).edge.startNode;
+				Node end = route.get(route.size()-1).edge.endNode;
+				addNewVehicle(type, true, vehicle.foreground,start, end, route , "",
+						timeNow, vehicle.id + "_time_" + timeNow + "_" + i, vehicle.vid,  profile);
 			}
 		}
 	}
@@ -840,7 +667,7 @@ public class TrafficNetwork extends RoadNetwork {
 		externalVehicleRepeatPerStep.clear();
 		// Reset temp values for lanes
 		for (final Lane lane : lanes) {
-			lane.vehicles.clear();
+			lane.clearVehicles();
 			lane.isBlocked = false;
 			lane.speedOfLatestVehicleLeftThisWorker = 100;
 			lane.endPositionOfLatestVehicleLeftThisWorker = 1000000000;
@@ -849,7 +676,7 @@ public class TrafficNetwork extends RoadNetwork {
 
 		// Clear parked vehicles from edges
 		for (final Edge edge : edges) {
-			edge.parkedVehicles.clear();
+			edge.clearParkedVehicles();
 		}
 
 		// Reset temporary values
@@ -860,27 +687,7 @@ public class TrafficNetwork extends RoadNetwork {
 		timeLastPublicVehicleCreated = 0;
 	}
 
-	/**
-	 * Moves vehicle from parking area onto roads.
-	 */
-	public boolean startOneVehicleFromParking(final Vehicle vehicle) {
-		final RouteLeg leg = vehicle.routeLegs.get(vehicle.indexLegOnRoute);
-		final Edge edge = leg.edge;
-		final Lane lane = edge.lanes.get(0);// Start from the lane closest to
-											// roadside
-		final double pos = getStartPositionInLane0(vehicle);
-		if (pos >= 0) {
-			edge.parkedVehicles.remove(vehicle);
-			vehicle.lane = lane;
-			vehicle.lane.vehicles.add(vehicle);
-			vehicle.headPosition = pos;
-			vehicle.speed = 0;
-			Collections.sort(vehicle.lane.vehicles, vehiclePositionComparator);// Sort
-			return true;
-		} else {
-			return false;
-		}
-	}
+
 
 	/**
 	 * Update the timers related to tram stops.
@@ -889,7 +696,7 @@ public class TrafficNetwork extends RoadNetwork {
 		for (int i = 0; i < internalTramStopEdges.size(); i++) {
 			final Edge edge = internalTramStopEdges.get(i);
 			if (edge.timeTramStopping > 0) {
-				edge.timeTramStopping -= 1 / Settings.numStepsPerSecond;
+				edge.timeTramStopping -= 1 / settings.numStepsPerSecond;
 
 				/*
 				 * Ensure the tram stop CAN NOT block for some time after the
@@ -898,12 +705,266 @@ public class TrafficNetwork extends RoadNetwork {
 				 * without stopping again.
 				 */
 				if (edge.timeTramStopping <= 0) {
-					edge.timeNoTramStopping = Settings.minGapBetweenTramStopTimerCountDowns;
+					edge.timeNoTramStopping = settings.minGapBetweenTramStopTimerCountDowns;
 				}
 			} else if (edge.timeNoTramStopping > 0) {
-				edge.timeNoTramStopping -= 1 / Settings.numStepsPerSecond;
+				edge.timeNoTramStopping -= 1 / settings.numStepsPerSecond;
 			}
 
 		}
 	}
+
+	public void blockTramAtTramStop() {
+		for (int i = 0; i < vehicles.size(); i++) {
+			final Vehicle vehicle = vehicles.get(i);
+			vehicle.blockAtTramStop();
+		}
+	}
+
+	public void changeLaneOfVehicles(final double timeNow) {
+		for (int i = 0; i < vehicles.size(); i++) {
+			final Vehicle vehicle = vehicles.get(i);
+			vehicle.changeLane(timeNow);
+		}
+	}
+
+	/**
+	 * Try to move vehicle from parking area onto roads. A vehicle can only be
+	 * released from parking if the current time has passed the earliest start
+	 * time of the vehicle.
+	 *
+	 */
+	public void releaseVehicleFromParking(final double timeNow,SimulationListener listener) {
+		for (Edge edge : edges) {
+			Vehicle next = edge.getVehicleToGetIntoTheLane();
+			if(next == null) {
+				next = edge.getNextParkedVehicle(timeNow);
+			}
+			edge.setNextVehicleToGetIntoTheLane(next);
+			if(next != null && next.startFromParking()){
+				if(listener != null){
+					listener.onVehicleStartMoving(vehicles, (int) (timeNow*settings.numStepsPerSecond), this);
+				}
+			}
+		}
+	}
+
+	public void releaseTripMakingVehicles(final double timeNow, SimulationListener listener) {
+		Vehicle next = getNextTripMakingVehicle(timeNow);
+		while (next != null){
+
+			if (!(next.isCAV() || next.isConnectedV())){
+				next.setRouteLegs(routingAlgoFactory.getRoutingAlgo(Routing.Algorithm.DIJKSTRA, this).createCompleteRoute(next.getStart(), next.getEnd(), next.type));
+			}
+			else {
+				next.setRouteLegs(routingAlgorithm.createCompleteRoute(next.getStart(), next.getEnd(), next.type));
+			}
+			if(listener != null){
+				listener.onVehicleAdd(Arrays.asList(next),(int)(timeNow/settings.numStepsPerSecond), this);
+			}
+			newVehiclesSinceLastReport.add(next);
+			newVehiclesforDemandEstimation.add(next);
+			next.park(true, timeNow);
+			next = getNextTripMakingVehicle(timeNow);
+		}
+	}
+
+	public Vehicle getNextTripMakingVehicle(double timeNow){
+		Vehicle v =  tripMakingVehicles.peek();
+		if(v != null && v.isStartTripMaking(timeNow)){
+			return tripMakingVehicles.poll();
+		}
+		return null;
+	}
+
+	public void updateTrafficLights(double timeNow){
+		if (settings.trafficLightTiming != TrafficLightTiming.NONE) {
+			lightCoordinator.scheduleLights(timeNow);
+			lightCoordinator.updateLights(timeNow);
+		}
+	}
+
+	public int getVehicleCount(){
+		return vehicles.size();
+	}
+
+	public void finishRemoveCheck(final double timeNow){
+		for (Vehicle vehicle : vehicles) {
+			if(!vehicle.isFinished()){
+				if(vehicle.lane != null && vehicle.lane.getFrontVehicleInLane().id == vehicle.id) {
+					if(timeNow - vehicle.getLastSpeedChangeTime() > settings.numStepsPerSecond * 300) {
+						System.out.println("Vehicle Stucked " + vehicle.id + " at: " + vehicle.lane.edge.index);
+					}
+				}
+			}else{
+				System.out.println("Finished Vehicle " + vehicle.id);
+			}
+		}
+	}
+
+	public void addTripFinishedVehicles(List<Vehicle> vehicles){
+		finishedVehicles.addAll(vehicles);
+	}
+
+	public List<Vehicle> getFinishedVehicles() {
+		return finishedVehicles;
+	}
+
+	public boolean isPublishTime(int step){
+		if(settings.updateStepInterval == 1){
+			return true;
+		}else {
+			return (step % settings.updateStepInterval) == 0;
+		}
+	}
+
+	public Comparator<Vehicle> getTripMakingVehicleComparator(){
+		return new Comparator<Vehicle>() {
+			@Override
+			public int compare(Vehicle v1, Vehicle v2) {
+				if(v1.timeRouteStart < v2.timeRouteStart){
+					return -1;
+				}else if(v1.timeRouteStart > v2.timeRouteStart){
+					return 1;
+				}
+				return 0;
+			}
+		};
+	}
+
+	public void setCrossingIncreasingOrders(){
+		for (Node node : nodes) {
+			for (Edge inwardEdge : node.inwardEdges) {
+				List<Edge> outEdges = new ArrayList<>();
+				outEdges.addAll(node.outwardEdges);
+				if(settings.isDriveOnLeft) {
+					Collections.sort(outEdges, new Comparator<Edge>() {
+						@Override
+						public int compare(Edge o1, Edge o2) {
+							int o1Left = RoadUtil.findOutwardEdgesOnLeft(inwardEdge, o1).size();
+							int o2Left = RoadUtil.findOutwardEdgesOnLeft(inwardEdge, o2).size();
+							if (o1Left < o2Left) {
+								return -1;
+							} else if (o1Left > o2Left) {
+								return 1;
+							} else {
+								return 0;
+							}
+						}
+					});
+				}else{
+					Collections.sort(outEdges, new Comparator<Edge>() {
+						@Override
+						public int compare(Edge o1, Edge o2) {
+							int o1Right = RoadUtil.findOutwardEdgesOnRight(inwardEdge, o1).size();
+							int o2Right = RoadUtil.findOutwardEdgesOnRight(inwardEdge, o2).size();
+							if(o1Right < o2Right){
+								return -1;
+							}else if(o1Right > o2Right){
+								return 1;
+							}else {
+								return 0;
+							}
+						}
+					});
+				}
+				LinkedHashMap<Edge, Integer> edgeLaneMap = new LinkedHashMap<>();
+
+				if(inwardEdge.getLaneCount() == 1){
+					for (Edge outEdge : outEdges) {
+						edgeLaneMap.put(outEdge, 0);
+					}
+				}else if(inwardEdge.getLaneCount() == outEdges.size()){
+					for (int i = 0; i < outEdges.size() ; i++) {
+						edgeLaneMap.put(outEdges.get(i), i);
+					}
+				}else{
+					//throw new UnsupportedOperationException("The condition is not supported at this moment");
+				}
+				inwardEdge.setEdgeLaneMap(edgeLaneMap);
+			}
+		}
+	}
+
+	public void clearPaths(){
+		paths.clear();
+	}
+
+	public ArrayList<VehiclePathExternal> getVehiclePaths(){
+		return paths;
+	}
+
+	public void addVehiclePaths(Vehicle v){
+		if (v.getNextRouteLegs().size() > 1 && (v.isCAV() || v.isConnectedV())) {
+			ArrayList<Integer> pathInInt = new ArrayList<>();
+			for (RouteLeg routeLeg : v.getNextRouteLegs()) {
+				pathInInt.add(routeLeg.edge.startNode.index);
+			}
+			if (v.getNextRouteLegs().size() > 1) {
+				Edge lastEdge = v.getNextRouteLegs().get(v.getNextRouteLegs().size() - 1).edge;
+				pathInInt.add(lastEdge.endNode.index);
+			}
+
+			double vehicleFraction = settings.mvgVehicleCount/settings.extListenerUpdateInterval;
+
+			paths.add(new VehiclePathExternal(pathInInt, 1));
+		}
+	}
+
+
+	public void updateStatistics(int step){
+
+		/**
+		 * Add stat collectors here
+		 */
+		updateFlow(step);
+		updateVehicleNumbers(step);
+
+	}
+
+	/**
+	 * Stat collectors
+	 */
+
+	public  void updateFlow(int step){
+		if (step%settings.mvgFlow == 0) {
+			for (Edge edge : edges) {
+				edge.updateTrafficStatistics();
+			}
+		}
+	}
+
+
+	public void updateVehicleNumbers(int step){
+		if (step%settings.mvgVehicleCount == 0) {
+			for (Edge edge : edges) {
+				int numVehicles = 0;
+				int numVehiclesRight = 0;
+				int numVehiclesStraight = 0;
+				int numVehiclesLeft = 0;
+				for (Lane lane : edge.getLanes()) {
+					//numVehicles += lane.getVehicles().size();
+					for (Vehicle v : lane.getVehicles()) {
+						if(v.isCAV() || v.isConnectedV()) {
+							numVehicles += 2;
+							if (v.edgeBeforeTurnRight == edge) {
+								numVehiclesRight++;
+							} else if (v.edgeBeforeTurnLeft == edge) {
+								numVehiclesLeft++;
+							} else {
+								numVehiclesStraight++;
+							}
+
+							addVehiclePaths(v);
+						}
+
+					}
+
+				}
+				edge.updateVehicleNumbers(numVehicles, numVehiclesStraight, numVehiclesRight, numVehiclesLeft);
+			}
+		}
+	}
+
+
 }

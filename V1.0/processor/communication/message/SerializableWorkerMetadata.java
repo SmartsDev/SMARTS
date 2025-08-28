@@ -29,4 +29,12 @@ public class SerializableWorkerMetadata {
 		}
 		return listSerializableGridCell;
 	}
+
+	public ArrayList<GridCell> processReceivedGridCells( GridCell[][] grid) {
+		final ArrayList<GridCell> cellsInWorkarea = new ArrayList<>();
+		for (final SerializableGridCell cell : gridCells) {
+			cellsInWorkarea.add(grid[cell.row][cell.column]);
+		}
+		return cellsInWorkarea;
+	}
 }
